@@ -34,13 +34,22 @@ ENV/
 Thumbs.db
 desktop.ini
 
-# Large Video Files (Keep samples directory, but ignore video files)
-samples/*.mp4
-samples/*.MP4
+# Large Video Files and Samples (Keep samples folder and markdown notes, but ignore all video/binary data)
 *.mp4
 *.MP4
+*.mov
+*.MOV
 *.avi
+*.AVI
 *.mkv
+*.MKV
+*.webm
+*.ts
+*.m4v
+samples/*
+!samples/README.md
+!samples/*.md
+!samples/.gitkeep
 
 # Large Model Weights (Keep weights/download.sh, but ignore weight files > 100MB)
 weights/*.pt
