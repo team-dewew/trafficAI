@@ -54,3 +54,8 @@ weights/*.weights
 # IDE
 .vscode/
 .idea/
+
+# EDA Generated Output
+eda_results/*.csv
+eda_results/frames/*.jpg
+eda_results/frames/*.png
