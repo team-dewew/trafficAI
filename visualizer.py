@@ -6,7 +6,9 @@ Visualizes:
   1. 4K camera scene zones (Polygons for road_area, zebras, and LineZones for stop lines).
   2. Detected and tracked road users (Bounding boxes, Class Names, Tracker IDs).
   3. Traffic light state (RED / GREEN) in real-time with HUD overlay and ROI bounding box.
-  4. Interactive playback (Pause/Play with Spacebar, Quit with 'q').
+  4. Resizes annotated 4K frames down to standard monitor resolution (1280x720) for smooth,
+     un-cropped real-time viewing on any display.
+  5. Interactive playback (Pause/Play with Spacebar, Step with 's', Quit with 'q').
 """
 from __future__ import annotations
 
@@ -88,14 +90,15 @@ def main():
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"[INFO] Resolution: {width}x{height} | FPS: {fps:.2f} | Frames: {total_frames}")
+    print(f"[INFO] Original Resolution: {width}x{height} | FPS: {fps:.2f} | Frames: {total_frames}")
+    print(f"[INFO] Display Resolution: {args.display_width}x{args.display_height}")
 
     # 1. Initialize YOLO Model & ByteTrack
     print(f"[INFO] Loading YOLO model: {args.model}...")
     model = YOLO(args.model)
     tracker = sv.ByteTrack()
 
-    # 2. Setup Zones from SCENE_CONFIG
+    # 2. Setup Zones from SCENE_CONFIG (Original 4K coordinates)
     # Line Zones
     stop_bottom_arr = SCENE_CONFIG["stop_line_bottom"]
     stop_line_bottom = sv.LineZone(
@@ -156,14 +159,15 @@ def main():
         text_padding=6,
     )
 
-    # 4. Setup Resizable Display Window
-    window_name = "Traffic AI — Realtime Visualizer"
+    # 4. Setup Named Window for Display
+    window_name = "Traffic AI Realtime Visualizer"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, args.display_width, args.display_height)
 
     tl_bbox = SCENE_CONFIG["traffic_light_bbox"]
     frame_idx = 0
     paused = False
+    display_frame = None
 
     print("\n[CONTROLS]")
     print("  'q' or ESC: Quit")
@@ -183,10 +187,10 @@ def main():
 
             t_sec = frame_idx / fps
 
-            # a) Determine Traffic Light State
+            # a) Determine Traffic Light State on original 4K frame
             tl_state = get_traffic_light_state(frame, tl_bbox)
 
-            # b) YOLO Detection & Tracking
+            # b) YOLO Detection & Tracking on original 4K frame
             results = model(
                 frame,
                 verbose=False,
@@ -199,7 +203,7 @@ def main():
             stop_line_bottom.trigger(tracked_detections)
             stop_line_top.trigger(tracked_detections)
 
-            # c) Annotate Zones onto Frame
+            # c) Annotate Zones onto 4K Frame
             frame = road_annotator.annotate(scene=frame, label="Road Area")
             frame = zebra_main_annotator.annotate(scene=frame, label="Zebra Main")
             frame = zebra_left_annotator.annotate(scene=frame, label="Zebra Left")
@@ -278,8 +282,14 @@ def main():
                 cv2.LINE_AA,
             )
 
-        # Show frame
-        cv2.imshow(window_name, frame)
+            # g) Resize the fully annotated 4K frame to standard display size
+            display_frame = cv2.resize(
+                frame, (args.display_width, args.display_height), interpolation=cv2.INTER_AREA
+            )
+
+        # Show the resized frame
+        if display_frame is not None:
+            cv2.imshow(window_name, display_frame)
 
         key = cv2.waitKey(1 if not paused else 30) & 0xFF
         if key == ord("q") or key == 27:  # 'q' or ESC

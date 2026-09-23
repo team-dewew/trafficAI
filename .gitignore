@@ -52,6 +52,13 @@ samples/*
 !samples/.gitkeep
 
 # Large Model Weights (Keep weights/download.sh, but ignore weight files > 100MB)
+*.pt
+*.pth
+*.onnx
+*.engine
+*.bin
+*.safetensors
+*.weights
 weights/*.pt
 weights/*.pth
 weights/*.onnx
