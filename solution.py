@@ -94,7 +94,7 @@ SCENE_CONFIG: dict[str, np.ndarray | tuple[int, int, int, int]] = {
     ], dtype=np.int32),
 
     # Traffic light region of interest (x1, y1, x2, y2)
-    "traffic_light_bbox": (1000, 500, 1050, 600),
+    "traffic_light_bbox": (2300, 730, 2345, 845),
 }
 
 # Relevant COCO class IDs for detection & tracking
@@ -107,22 +107,15 @@ COCO_ROAD_USERS = {
     7: "truck",
 }
 
+VEHICLE_CLASSES = {"car", "bus", "truck", "motorcycle"}
+
 
 def get_traffic_light_state(
     frame: np.ndarray,
     bbox: tuple[int, int, int, int],
     red_threshold: int = 25,
 ) -> str:
-    """Determine traffic light state (RED or GREEN) inside the specified bbox using HSV color masking.
-
-    Args:
-        frame: BGR uint8 image array.
-        bbox: (x1, y1, x2, y2) bounding box crop coordinates.
-        red_threshold: minimum number of bright red pixels to consider the light RED.
-
-    Returns:
-        "RED" if red pixel count exceeds threshold, else "GREEN".
-    """
+    """Determine traffic light state (RED or GREEN) inside the specified bbox using HSV color masking."""
     x1, y1, x2, y2 = bbox
     h, w = frame.shape[:2]
 
@@ -152,6 +145,45 @@ def get_traffic_light_state(
 
     red_pixel_count = cv2.countNonZero(red_mask)
     return "RED" if red_pixel_count > red_threshold else "GREEN"
+
+
+def get_direction(
+    history: list[tuple[float, float, float]], dt: float = 1.0
+) -> tuple[float, float]:
+    """Calculate displacement (dx, dy) over approximately `dt` seconds from movement history.
+
+    history: [(t_sec, x_center, y_center), ...]
+    Returns (dx, dy) = (curr_x - prev_x, curr_y - prev_y).
+    """
+    if len(history) < 2:
+        return 0.0, 0.0
+
+    curr_t, curr_x, curr_y = history[-1]
+    target_t = curr_t - dt
+
+    # Search backwards for the point closest to ~dt seconds ago
+    prev_x, prev_y = history[0][1], history[0][2]
+    for t, x, y in reversed(history[:-1]):
+        if t <= target_t:
+            prev_x, prev_y = x, y
+            break
+
+    return float(curr_x - prev_x), float(curr_y - prev_y)
+
+
+def get_speed(history: list[tuple[float, float, float]], dt: float = 1.0) -> float:
+    """Calculate displacement speed in pixels over approximately `dt` seconds."""
+    if len(history) < 2:
+        return float("inf")
+
+    curr_t = history[-1][0]
+    first_t = history[0][0]
+    # Require at least ~0.8s of tracking history before judging speed
+    if (curr_t - first_t) < 0.8:
+        return float("inf")
+
+    dx, dy = get_direction(history, dt)
+    return float(np.hypot(dx, dy))
 
 
 def merge_same_class_segments(events: list[list]) -> list[list]:
@@ -231,8 +263,12 @@ def detect_events(video_path: str) -> list[list]:
     events: list[list] = []
 
     # 6. State tracking structures
-    track_history: dict[int, list[float]] = {}
-    active_events: dict[int, dict] = {}
+    # track_history[track_id] = [(t_sec, cx, cy), ...]
+    track_history: dict[int, list[tuple[float, float, float]]] = {}
+    last_seen_time: dict[int, float] = {}
+
+    # active_events[(track_id, label)] = {"label": str, "start_sec": float}
+    active_events: dict[tuple[int, str], dict] = {}
     crossed_red_light: set[int] = set()
 
     tl_bbox = SCENE_CONFIG["traffic_light_bbox"]
@@ -262,7 +298,7 @@ def detect_events(video_path: str) -> list[list]:
         crossed_bottom = crossed_in | crossed_out
 
         # Track which IDs are seen in this frame
-        current_frame_track_ids = set()
+        current_frame_track_ids: set[int] = set()
 
         # c) Loop over tracked detections
         for i in range(len(tracked_detections)):
@@ -274,39 +310,121 @@ def detect_events(video_path: str) -> list[list]:
                 continue
 
             current_frame_track_ids.add(track_id)
+            last_seen_time[track_id] = t_sec
+
             class_id = int(tracked_detections.class_id[i])
             class_name = COCO_ROAD_USERS.get(class_id, "unknown")
 
-            # Update track history with last seen time
-            track_history[track_id] = [t_sec]
+            # Calculate centroid (cx, cy)
+            x1, y1, x2, y2 = tracked_detections.xyxy[i]
+            cx = float((x1 + x2) / 2.0)
+            cy = float((y1 + y2) / 2.0)
+
+            # Update movement trajectory history
+            if track_id not in track_history:
+                track_history[track_id] = []
+            track_history[track_id].append((t_sec, cx, cy))
+
+            # Keep only the last ~100 entries (approx. 3-5 seconds of history)
+            if len(track_history[track_id]) > 100:
+                track_history[track_id] = track_history[track_id][-100:]
+
+            # Calculate motion metrics over ~1 second
+            dx, dy = get_direction(track_history[track_id], dt=1.0)
+            speed = get_speed(track_history[track_id], dt=1.0)
 
             # -------------------------------------------------------------
-            # Logic for jaywalking:
+            # 1. Logic for jaywalking:
             # -------------------------------------------------------------
+            jw_key = (track_id, "jaywalking")
             if class_name == "pedestrian":
                 # Inside road area, but outside all authorized crosswalks
                 if in_road[i] and not in_zebra_main[i] and not in_zebra_left[i]:
-                    if track_id not in active_events:
-                        active_events[track_id] = {
+                    if jw_key not in active_events:
+                        active_events[jw_key] = {
                             "label": "jaywalking",
                             "start_sec": t_sec,
                         }
                 else:
-                    if track_id in active_events and active_events[track_id]["label"] == "jaywalking":
-                        start_sec = active_events[track_id]["start_sec"]
+                    if jw_key in active_events:
+                        start_sec = active_events[jw_key]["start_sec"]
                         if t_sec > start_sec:
                             events.append([round(start_sec, 3), round(t_sec, 3), "jaywalking"])
-                        del active_events[track_id]
+                        del active_events[jw_key]
 
             # -------------------------------------------------------------
-            # Logic for red_light:
+            # 2. Logic for red_light:
             # -------------------------------------------------------------
-            if class_name in ["car", "bus", "truck", "motorcycle"]:
+            if class_name in VEHICLE_CLASSES:
                 if crossed_bottom[i] and tl_state == "RED":
                     if track_id not in crossed_red_light:
                         crossed_red_light.add(track_id)
-                        # Append event with a static 2-second duration
                         events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "red_light"])
+
+            # -------------------------------------------------------------
+            # 3. Logic for wrong_way:
+            # Top lanes (y < 900): expected right-to-left, wrong if moving left-to-right (dx > 50)
+            # Bottom lanes (y > 1000): expected left-to-right, wrong if moving right-to-left (dx < -50)
+            # -------------------------------------------------------------
+            ww_key = (track_id, "wrong_way")
+            if class_name in VEHICLE_CLASSES:
+                is_wrong_way = False
+                if cy < 900 and dx > 50:
+                    is_wrong_way = True
+                elif cy > 1000 and dx < -50:
+                    is_wrong_way = True
+
+                if is_wrong_way:
+                    if ww_key not in active_events:
+                        active_events[ww_key] = {
+                            "label": "wrong_way",
+                            "start_sec": t_sec,
+                        }
+                else:
+                    if ww_key in active_events:
+                        start_sec = active_events[ww_key]["start_sec"]
+                        if t_sec > start_sec:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "wrong_way"])
+                        del active_events[ww_key]
+
+            # -------------------------------------------------------------
+            # 4. Logic for stopped_vehicle:
+            # Stationary (speed < 10 px in 1s) for >= 10.0 seconds
+            # -------------------------------------------------------------
+            stop_key = (track_id, "stopped_vehicle")
+            if class_name in VEHICLE_CLASSES:
+                is_stopped = speed < 10.0
+
+                if is_stopped:
+                    if stop_key not in active_events:
+                        active_events[stop_key] = {
+                            "label": "stopped_vehicle",
+                            "start_sec": t_sec,
+                        }
+                else:
+                    if stop_key in active_events:
+                        start_sec = active_events[stop_key]["start_sec"]
+                        duration = t_sec - start_sec
+                        # Only log as violation if stationary for at least 10 seconds
+                        if duration >= 10.0:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "stopped_vehicle"])
+                        del active_events[stop_key]
+
+        # Close active events for tracks that disappeared from the camera view
+        for (t_id, ev_label), ev_info in list(active_events.items()):
+            if t_id not in current_frame_track_ids:
+                last_t = last_seen_time.get(t_id, t_sec)
+                # If track has been unseen for more than 1.5 seconds, close it
+                if (t_sec - last_t) >= 1.5:
+                    s = ev_info["start_sec"]
+                    e = last_t
+                    if ev_label == "stopped_vehicle":
+                        if (e - s) >= 10.0:
+                            events.append([round(s, 3), round(e, 3), ev_label])
+                    else:
+                        if e > s:
+                            events.append([round(s, 3), round(e, 3), ev_label])
+                    del active_events[(t_id, ev_label)]
 
         frame_idx += 1
 
@@ -315,12 +433,16 @@ def detect_events(video_path: str) -> list[list]:
     # Determine final video duration
     final_duration = duration_from_meta if duration_from_meta > 0 else (frame_idx / fps)
 
-    # Close any remaining active events using video duration as end_sec
-    for track_id, ev_info in list(active_events.items()):
+    # Close any remaining active events at the end of the video
+    for (t_id, ev_label), ev_info in list(active_events.items()):
         start_sec = ev_info["start_sec"]
         end_sec = final_duration
-        if end_sec > start_sec:
-            events.append([round(start_sec, 3), round(end_sec, 3), ev_info["label"]])
+        if ev_label == "stopped_vehicle":
+            if (end_sec - start_sec) >= 10.0:
+                events.append([round(start_sec, 3), round(end_sec, 3), ev_label])
+        else:
+            if end_sec > start_sec:
+                events.append([round(start_sec, 3), round(end_sec, 3), ev_label])
     active_events.clear()
 
     # Merge any overlapping segments of the same class to ensure format compliance
