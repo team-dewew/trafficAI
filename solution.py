@@ -14,7 +14,11 @@ do not add new ids.
 """
 from __future__ import annotations
 
+from pathlib import Path
+import cv2
 import numpy as np
+import supervision as sv
+from ultralytics import YOLO
 
 # Official class ids (14). See the task description for definitions and
 # start/end conventions. Remove entries you never predict; never add.
@@ -39,33 +43,290 @@ CLASSES: list[str] = [
 # P(an `accident` starts within the next RISK_HORIZON_SEC seconds).
 RISK_HORIZON_SEC = 5.0
 
+# ----------------------------------------------------------------------------
+# Global Scene Configuration (calibrated for 4K 3840x2160 resolution)
+# ----------------------------------------------------------------------------
+SCENE_CONFIG: dict[str, np.ndarray | tuple[int, int, int, int]] = {
+    # Stop lines (LineZone coordinates: 2 points [x, y])
+    "stop_line_bottom": np.array([[562, 1101], [1862, 933]], dtype=np.int32),
+    "stop_line_top": np.array([[2180, 947], [2396, 1018]], dtype=np.int32),
+
+    # Pedestrian Crossings (PolygonZone coordinates)
+    "zebra_main": np.array([
+        [646, 1271], [648, 1128], [1963, 955], [2435, 922], [3383, 865],
+        [3692, 985], [3761, 1023], [2750, 1176], [2652, 1206], [2551, 1255],
+        [2401, 1247], [1712, 1330], [653, 1371]
+    ], dtype=np.int32),
+    "zebra_left": np.array([
+        [682, 1375], [1618, 1768], [1858, 2158], [1015, 2158], [839, 2027],
+        [667, 1862], [465, 1761], [232, 1656], [337, 1557]
+    ], dtype=np.int32),
+
+    # Full Intersection Road Area (PolygonZone coordinates)
+    "road_area": np.array([
+        [1240, 1293], [2370, 1129], [2459, 1167], [2555, 1167], [2607, 1155],
+        [2637, 1141], [2633, 1103], [3183, 1048], [3714, 985], [3830, 1011],
+        [3833, 2125], [3818, 2151], [1820, 2151], [1757, 2099], [1508, 1832],
+        [1786, 1813], [1942, 1798], [1942, 1768], [1820, 1683], [1753, 1650],
+        [1608, 1676], [1444, 1694], [1381, 1728], [1359, 1765], [1017, 1590],
+        [1043, 1586], [1270, 1560], [1444, 1527], [1526, 1508], [1482, 1475],
+        [1344, 1386], [1270, 1367], [1218, 1382], [1129, 1479], [1032, 1546],
+        [985, 1570], [627, 1419], [672, 1378]
+    ], dtype=np.int32),
+
+    # Additional contextual regions
+    "sidewalk_left": np.array([
+        [300, 1572], [378, 1638], [642, 1750], [542, 1798], [337, 1869],
+        [244, 1910], [230, 1932], [270, 1947], [854, 1898], [1173, 2154],
+        [48, 2155], [7, 2136], [7, 1716]
+    ], dtype=np.int32),
+    "approach_bottom": np.array([
+        [363, 1029], [159, 836], [22, 661], [-1, 316], [140, 264],
+        [404, 368], [1013, 580], [1671, 828], [1854, 918], [802, 1045],
+        [495, 1094]
+    ], dtype=np.int32),
+    "road_top": np.array([
+        [2180, 947], [1664, 765], [1084, 568], [516, 372], [204, 267],
+        [62, 193], [66, 160], [92, 119], [170, 85], [289, 89],
+        [404, 152], [549, 212], [753, 245], [995, 286], [1199, 301],
+        [1296, 338], [1716, 431], [2076, 535], [2392, 598], [2581, 654],
+        [2670, 706], [2722, 754], [2838, 769], [3417, 918], [2396, 1018]
+    ], dtype=np.int32),
+
+    # Traffic light region of interest (x1, y1, x2, y2)
+    "traffic_light_bbox": (1000, 500, 1050, 600),
+}
+
+# Relevant COCO class IDs for detection & tracking
+COCO_ROAD_USERS = {
+    0: "pedestrian",
+    1: "bicycle",
+    2: "car",
+    3: "motorcycle",
+    5: "bus",
+    7: "truck",
+}
+
+
+def get_traffic_light_state(
+    frame: np.ndarray,
+    bbox: tuple[int, int, int, int],
+    red_threshold: int = 25,
+) -> str:
+    """Determine traffic light state (RED or GREEN) inside the specified bbox using HSV color masking.
+
+    Args:
+        frame: BGR uint8 image array.
+        bbox: (x1, y1, x2, y2) bounding box crop coordinates.
+        red_threshold: minimum number of bright red pixels to consider the light RED.
+
+    Returns:
+        "RED" if red pixel count exceeds threshold, else "GREEN".
+    """
+    x1, y1, x2, y2 = bbox
+    h, w = frame.shape[:2]
+
+    # Clip coordinates to frame boundary
+    x1, x2 = max(0, min(x1, w)), max(0, min(x2, w))
+    y1, y2 = max(0, min(y1, h)), max(0, min(y2, h))
+
+    if x2 <= x1 or y2 <= y1:
+        return "GREEN"
+
+    crop = frame[y1:y2, x1:x2]
+    if crop.size == 0:
+        return "GREEN"
+
+    # Convert to HSV color space
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+    # In HSV, red hue wraps around 0 and 180
+    lower_red1 = np.array([0, 70, 70], dtype=np.uint8)
+    upper_red1 = np.array([10, 255, 255], dtype=np.uint8)
+    lower_red2 = np.array([170, 70, 70], dtype=np.uint8)
+    upper_red2 = np.array([180, 255, 255], dtype=np.uint8)
+
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask = mask1 | mask2
+
+    red_pixel_count = cv2.countNonZero(red_mask)
+    return "RED" if red_pixel_count > red_threshold else "GREEN"
+
+
+def merge_same_class_segments(events: list[list]) -> list[list]:
+    """Merge overlapping or adjacent segments of the same class to conform to hackathon rules."""
+    if not events:
+        return []
+
+    by_class: dict[str, list[list[float]]] = {}
+    for item in events:
+        s, e, label = float(item[0]), float(item[1]), str(item[2])
+        if e > s:
+            by_class.setdefault(label, []).append([s, e])
+
+    merged_out: list[list] = []
+    for label, intervals in by_class.items():
+        intervals.sort(key=lambda x: x[0])
+        merged = [intervals[0]]
+        for cur in intervals[1:]:
+            prev = merged[-1]
+            if cur[0] <= prev[1]:  # overlap or contiguous
+                prev[1] = max(prev[1], cur[1])
+            else:
+                merged.append(cur)
+        for s, e in merged:
+            merged_out.append([round(s, 3), round(e, 3), label])
+
+    merged_out.sort(key=lambda x: (x[0], x[1]))
+    return merged_out
+
 
 def detect_events(video_path: str) -> list[list]:
     """Part A — traffic event detection.
 
     Args:
-        video_path: path to one .mp4 file. You may open it any way you like
-            (OpenCV, decord, PyAV, ffmpeg), read it several times, sample
-            frames, run batched models — anything goes.
+        video_path: path to one .mp4 file.
 
     Returns:
-        A list of events, each ``[start_sec, end_sec, label]`` with
-        ``0 <= start_sec < end_sec <= duration`` (floats, seconds from the
-        first frame) and ``label in CLASSES``. Return ``[]`` if nothing
-        happened. Segments of the same class must not overlap.
-
-    A typical pipeline:
-        1. sample frames (every 2nd–5th frame is usually enough),
-        2. detect road users (YOLO / RT-DETR) and track them (ByteTrack),
-        3. turn trajectories + scene layout (lanes, stop line, crossing)
-           into per-frame flags for each class,
-        4. merge consecutive flags into segments, drop blips < 0.5 s,
-           merge gaps < 1 s,
-        5. optionally re-score `accident` / `near_miss` candidates with a
-           learned clip classifier.
+        A list of events, each [start_sec, end_sec, label] with
+        0 <= start_sec < end_sec <= duration and label in CLASSES.
     """
-    # TODO: replace this stub with your pipeline.
-    return []
+    # 1. Initialize YOLO detector
+    local_weights = Path("weights/yolov8s.pt")
+    model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
+    model = YOLO(model_path)
+
+    # 2. Initialize Line Zones
+    stop_bottom_arr = SCENE_CONFIG["stop_line_bottom"]
+    stop_line_bottom = sv.LineZone(
+        start=sv.Point(int(stop_bottom_arr[0][0]), int(stop_bottom_arr[0][1])),
+        end=sv.Point(int(stop_bottom_arr[1][0]), int(stop_bottom_arr[1][1])),
+    )
+
+    stop_top_arr = SCENE_CONFIG["stop_line_top"]
+    stop_line_top = sv.LineZone(
+        start=sv.Point(int(stop_top_arr[0][0]), int(stop_top_arr[0][1])),
+        end=sv.Point(int(stop_top_arr[1][0]), int(stop_top_arr[1][1])),
+    )
+
+    # 3. Initialize Polygon Zones
+    zebra_main_zone = sv.PolygonZone(polygon=SCENE_CONFIG["zebra_main"])
+    zebra_left_zone = sv.PolygonZone(polygon=SCENE_CONFIG["zebra_left"])
+    road_area_zone = sv.PolygonZone(polygon=SCENE_CONFIG["road_area"])
+
+    # 4. Initialize Multi-Object Tracker (ByteTrack)
+    tracker = sv.ByteTrack()
+
+    # 5. Open video stream
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return []
+
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
+
+    frame_idx = 0
+    events: list[list] = []
+
+    # 6. State tracking structures
+    track_history: dict[int, list[float]] = {}
+    active_events: dict[int, dict] = {}
+    crossed_red_light: set[int] = set()
+
+    tl_bbox = SCENE_CONFIG["traffic_light_bbox"]
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            break
+
+        t_sec = frame_idx / fps
+
+        # a) Determine current traffic light status
+        tl_state = get_traffic_light_state(frame, tl_bbox)
+
+        # b) Detect road users and update tracker
+        results = model(frame, verbose=False, classes=list(COCO_ROAD_USERS.keys()))[0]
+        detections = sv.Detections.from_ultralytics(results)
+        tracked_detections = tracker.update_with_detections(detections)
+
+        # Evaluate all zones at once on tracked detections to get boolean masks
+        in_road = road_area_zone.trigger(tracked_detections)
+        in_zebra_main = zebra_main_zone.trigger(tracked_detections)
+        in_zebra_left = zebra_left_zone.trigger(tracked_detections)
+
+        # LineZone trigger returns a tuple: (crossed_in, crossed_out)
+        crossed_in, crossed_out = stop_line_bottom.trigger(tracked_detections)
+        crossed_bottom = crossed_in | crossed_out
+
+        # Track which IDs are seen in this frame
+        current_frame_track_ids = set()
+
+        # c) Loop over tracked detections
+        for i in range(len(tracked_detections)):
+            if tracked_detections.tracker_id is None:
+                continue
+
+            track_id = int(tracked_detections.tracker_id[i])
+            if track_id < 0:
+                continue
+
+            current_frame_track_ids.add(track_id)
+            class_id = int(tracked_detections.class_id[i])
+            class_name = COCO_ROAD_USERS.get(class_id, "unknown")
+
+            # Update track history with last seen time
+            track_history[track_id] = [t_sec]
+
+            # -------------------------------------------------------------
+            # Logic for jaywalking:
+            # -------------------------------------------------------------
+            if class_name == "pedestrian":
+                # Inside road area, but outside all authorized crosswalks
+                if in_road[i] and not in_zebra_main[i] and not in_zebra_left[i]:
+                    if track_id not in active_events:
+                        active_events[track_id] = {
+                            "label": "jaywalking",
+                            "start_sec": t_sec,
+                        }
+                else:
+                    if track_id in active_events and active_events[track_id]["label"] == "jaywalking":
+                        start_sec = active_events[track_id]["start_sec"]
+                        if t_sec > start_sec:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "jaywalking"])
+                        del active_events[track_id]
+
+            # -------------------------------------------------------------
+            # Logic for red_light:
+            # -------------------------------------------------------------
+            if class_name in ["car", "bus", "truck", "motorcycle"]:
+                if crossed_bottom[i] and tl_state == "RED":
+                    if track_id not in crossed_red_light:
+                        crossed_red_light.add(track_id)
+                        # Append event with a static 2-second duration
+                        events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "red_light"])
+
+        frame_idx += 1
+
+    cap.release()
+
+    # Determine final video duration
+    final_duration = duration_from_meta if duration_from_meta > 0 else (frame_idx / fps)
+
+    # Close any remaining active events using video duration as end_sec
+    for track_id, ev_info in list(active_events.items()):
+        start_sec = ev_info["start_sec"]
+        end_sec = final_duration
+        if end_sec > start_sec:
+            events.append([round(start_sec, 3), round(end_sec, 3), ev_info["label"]])
+    active_events.clear()
+
+    # Merge any overlapping segments of the same class to ensure format compliance
+    events = merge_same_class_segments(events)
+
+    return events
 
 
 class RiskEstimator:
