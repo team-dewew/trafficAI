@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-visualizer.py — Fast, interactive visual inspection tool with dynamic coordinate tuning.
+visualizer.py — Interactive Live Calibrator for Traffic AI.
 
-Features:
-  1. Downscales 4K input to 1080p (SCALE = 0.5) and runs YOLOv8n (Nano) for buttery smooth live FPS.
-  2. Dynamically shifts all SCENE_CONFIG zones by (X_OFFSET, Y_OFFSET) without modifying solution.py.
-  3. Real-time visual feedback for tuning zone positions on the road.
-  4. Interactive playback: 'q'/ESC to quit, SPACE/'p' to pause/resume, 's' to step single frame.
+Live Calibration Controls:
+  - W / Up Arrow:    Shift zones UP (Y_OFFSET -= 5)
+  - S / Down Arrow:  Shift zones DOWN (Y_OFFSET += 5)
+  - A / Left Arrow:  Shift zones LEFT (X_OFFSET -= 5)
+  - D / Right Arrow: Shift zones RIGHT (X_OFFSET += 5)
+  - SPACE or 'p':    Pause / Resume playback
+  - 'q' or ESC:      Quit and print final tuned offsets to terminal
 """
 from __future__ import annotations
 
@@ -26,17 +28,17 @@ from solution import (
 )
 
 # ----------------------------------------------------------------------------
-# Live Tuning Constants (Adjust these to shift and scale all zones in real-time)
+# Calibration Defaults
 # ----------------------------------------------------------------------------
-X_OFFSET = -80  # Moves all zones left/right (negative = left, positive = right)
-Y_OFFSET = -80  # Moves all zones up/down (negative = up, positive = down)
-SCALE = 0.5     # Downscales processing from 4K to 1080p for high performance
+X_OFFSET = 0    # Dynamic X shift on original 4K scale
+Y_OFFSET = 0    # Dynamic Y shift on original 4K scale
+SCALE = 0.5     # Downscale 4K to 1080p for buttery smooth real-time performance
 
 
 def adjust_coordinates(
     arr: np.ndarray, x_off: int, y_off: int, scale: float
 ) -> np.ndarray:
-    """Shift and scale a numpy coordinate array."""
+    """Shift 4K coordinates by offset and scale down to display resolution."""
     offset = np.array([x_off, y_off], dtype=np.float32)
     return ((arr.astype(np.float32) + offset) * scale).astype(np.int32)
 
@@ -44,7 +46,7 @@ def adjust_coordinates(
 def adjust_bbox(
     bbox: tuple[int, int, int, int], x_off: int, y_off: int, scale: float
 ) -> tuple[int, int, int, int]:
-    """Shift and scale a bounding box (x1, y1, x2, y2)."""
+    """Shift 4K bounding box by offset and scale down to display resolution."""
     x1, y1, x2, y2 = bbox
     return (
         int((x1 + x_off) * scale),
@@ -54,90 +56,8 @@ def adjust_bbox(
     )
 
 
-def find_default_video() -> str:
-    """Find the first available sample video or return a default path."""
-    samples_dir = Path("samples")
-    if samples_dir.exists():
-        for ext in (".MP4", ".mp4", ".avi", ".mkv"):
-            found = list(samples_dir.glob(f"*{ext}"))
-            if found:
-                return str(found[0])
-    return "samples/C3896.MP4"
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Traffic AI Realtime Visualizer (Fast 1080p Tuning Preview)"
-    )
-    parser.add_argument(
-        "--video",
-        type=str,
-        default=find_default_video(),
-        help="Path to .mp4 video file (default: first found in samples/)",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="yolov8n.pt",
-        help="YOLO model (default: yolov8n.pt for maximum live FPS)",
-    )
-    parser.add_argument(
-        "--x-offset",
-        type=int,
-        default=X_OFFSET,
-        help=f"X coordinate offset (default: {X_OFFSET})",
-    )
-    parser.add_argument(
-        "--y-offset",
-        type=int,
-        default=Y_OFFSET,
-        help=f"Y coordinate offset (default: {Y_OFFSET})",
-    )
-    parser.add_argument(
-        "--scale",
-        type=float,
-        default=SCALE,
-        help=f"Processing scale factor (default: {SCALE})",
-    )
-    parser.add_argument(
-        "--stride",
-        type=int,
-        default=1,
-        help="Process every N-th frame (default: 1)",
-    )
-    args = parser.parse_args()
-
-    x_off = args.x_offset
-    y_off = args.y_offset
-    scale = args.scale
-
-    video_path = Path(args.video)
-    if not video_path.exists():
-        print(f"[ERROR] Video file not found: {video_path}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"[INFO] Opening video: {video_path}")
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        print(f"[ERROR] Could not open video: {video_path}", file=sys.stderr)
-        sys.exit(1)
-
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    proc_w = int(orig_w * scale)
-    proc_h = int(orig_h * scale)
-
-    print(f"[INFO] Original 4K: {orig_w}x{orig_h} | Scaled Display: {proc_w}x{proc_h}")
-    print(f"[INFO] Offsets applied: X={x_off}, Y={y_off} | Scale={scale}")
-
-    # 1. Initialize Lightweight YOLO Model (Nano) & ByteTrack
-    print(f"[INFO] Loading YOLO model: {args.model}...")
-    model = YOLO(args.model)
-    tracker = sv.ByteTrack()
-
-    # 2. Dynamically Adjust SCENE_CONFIG Coordinates
+def build_zones_and_annotators(x_off: int, y_off: int, scale: float):
+    """Rebuild all supervision zones and annotators with the current offsets."""
     adj_stop_bottom = adjust_coordinates(
         SCENE_CONFIG["stop_line_bottom"], x_off, y_off, scale
     )
@@ -157,7 +77,6 @@ def main():
         SCENE_CONFIG["traffic_light_bbox"], x_off, y_off, scale
     )
 
-    # 3. Setup Supervision Zones using Adjusted Coordinates
     stop_line_bottom = sv.LineZone(
         start=sv.Point(int(adj_stop_bottom[0][0]), int(adj_stop_bottom[0][1])),
         end=sv.Point(int(adj_stop_bottom[1][0]), int(adj_stop_bottom[1][1])),
@@ -206,7 +125,90 @@ def main():
         text_scale=0.5,
     )
 
-    # 4. Setup Detection Annotators for 1080p
+    return {
+        "stop_line_bottom": stop_line_bottom,
+        "line_annotator_bottom": line_annotator_bottom,
+        "stop_line_top": stop_line_top,
+        "line_annotator_top": line_annotator_top,
+        "road_area_zone": road_area_zone,
+        "road_annotator": road_annotator,
+        "zebra_main_zone": zebra_main_zone,
+        "zebra_main_annotator": zebra_main_annotator,
+        "zebra_left_zone": zebra_left_zone,
+        "zebra_left_annotator": zebra_left_annotator,
+        "tl_bbox": adj_tl_bbox,
+    }
+
+
+def find_default_video() -> str:
+    """Find the first available sample video or return a default path."""
+    samples_dir = Path("samples")
+    if samples_dir.exists():
+        for ext in (".MP4", ".mp4", ".avi", ".mkv"):
+            found = list(samples_dir.glob(f"*{ext}"))
+            if found:
+                return str(found[0])
+    return "samples/C3896.MP4"
+
+
+def main():
+    global X_OFFSET, Y_OFFSET
+
+    parser = argparse.ArgumentParser(
+        description="Traffic AI Realtime Interactive Calibrator"
+    )
+    parser.add_argument(
+        "--video",
+        type=str,
+        default=find_default_video(),
+        help="Path to .mp4 video file (default: first found in samples/)",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="yolov8n.pt",
+        help="YOLO model (default: yolov8n.pt for fast live preview)",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=1,
+        help="Process every N-th frame (default: 1)",
+    )
+    args = parser.parse_args()
+
+    video_path = Path(args.video)
+    if not video_path.exists():
+        print(f"[ERROR] Video file not found: {video_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\n========================================================")
+    print(f"       TRAFFIC AI — INTERACTIVE LIVE CALIBRATOR         ")
+    print(f"========================================================")
+    print(f"[INFO] Video: {video_path.name}")
+    print(f"[INFO] Controls:")
+    print(f"   [W] or [UP ARROW]    : Shift zones UP   (Y -= 5)")
+    print(f"   [S] or [DOWN ARROW]  : Shift zones DOWN (Y += 5)")
+    print(f"   [A] or [LEFT ARROW]  : Shift zones LEFT (X -= 5)")
+    print(f"   [D] or [RIGHT ARROW] : Shift zones RIGHT (X += 5)")
+    print(f"   [SPACE] or [P]       : Pause / Resume playback")
+    print(f"   [Q] or [ESC]         : Exit & Print Final Offsets")
+    print(f"========================================================\n")
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        print(f"[ERROR] Could not open video: {video_path}", file=sys.stderr)
+        sys.exit(1)
+
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+    # 1. Initialize YOLO Model & ByteTrack
+    print(f"[INFO] Loading {args.model} for real-time tracking...")
+    model = YOLO(args.model)
+    tracker = sv.ByteTrack()
+
+    # 2. Setup Detection Annotators
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(
         text_scale=0.45,
@@ -214,21 +216,23 @@ def main():
         text_padding=4,
     )
 
-    window_name = "Traffic AI Realtime Visualizer"
+    # 3. Build initial zones with (X_OFFSET, Y_OFFSET)
+    zones = build_zones_and_annotators(X_OFFSET, Y_OFFSET, SCALE)
+    last_offset = (X_OFFSET, Y_OFFSET)
+
+    window_name = "Traffic AI Realtime Calibrator"
     frame_idx = 0
     paused = False
-
-    print("\n[CONTROLS]")
-    print("  'q' or ESC: Quit")
-    print("  SPACE or 'p': Pause / Resume playback")
-    print("  's': Step single frame while paused\n")
+    display_frame = None
 
     while cap.isOpened():
         if not paused:
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                print("\n[INFO] End of video reached.")
-                break
+            ret, raw_frame = cap.read()
+            if not ret or raw_frame is None:
+                print("\n[INFO] End of video reached. Looping video...")
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                frame_idx = 0
+                continue
 
             frame_idx += 1
             if args.stride > 1 and (frame_idx % args.stride != 0):
@@ -236,13 +240,18 @@ def main():
 
             t_sec = frame_idx / fps
 
-            # Immediately downscale 4K frame to 1080p for fast processing
-            frame = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+            # Immediately downscale 4K frame to 1080p for buttery smooth FPS
+            frame = cv2.resize(raw_frame, (0, 0), fx=SCALE, fy=SCALE)
 
-            # a) Determine Traffic Light State on adjusted bbox
-            tl_state = get_traffic_light_state(frame, adj_tl_bbox)
+            # Rebuild zones if user changed offsets
+            if (X_OFFSET, Y_OFFSET) != last_offset:
+                zones = build_zones_and_annotators(X_OFFSET, Y_OFFSET, SCALE)
+                last_offset = (X_OFFSET, Y_OFFSET)
 
-            # b) YOLO Detection & Tracking on scaled frame
+            # a) Traffic light state on shifted bbox
+            tl_state = get_traffic_light_state(frame, zones["tl_bbox"])
+
+            # b) YOLO Detection & Tracking
             results = model(
                 frame,
                 verbose=False,
@@ -251,21 +260,23 @@ def main():
             detections = sv.Detections.from_ultralytics(results)
             tracked_detections = tracker.update_with_detections(detections)
 
-            # Update Line Zones counters
-            stop_line_bottom.trigger(tracked_detections)
-            stop_line_top.trigger(tracked_detections)
+            # Update Line Zones
+            zones["stop_line_bottom"].trigger(tracked_detections)
+            zones["stop_line_top"].trigger(tracked_detections)
 
-            # c) Annotate Adjusted Zones onto Scaled Frame
-            frame = road_annotator.annotate(scene=frame, label="Road Area")
-            frame = zebra_main_annotator.annotate(scene=frame, label="Zebra Main")
-            frame = zebra_left_annotator.annotate(scene=frame, label="Zebra Left")
-            frame = line_annotator_bottom.annotate(
-                frame=frame, line_counter=stop_line_bottom
+            # c) Annotate shifted zones
+            frame = zones["road_annotator"].annotate(scene=frame, label="Road Area")
+            frame = zones["zebra_main_annotator"].annotate(scene=frame, label="Zebra Main")
+            frame = zones["zebra_left_annotator"].annotate(scene=frame, label="Zebra Left")
+            frame = zones["line_annotator_bottom"].annotate(
+                frame=frame, line_counter=zones["stop_line_bottom"]
             )
-            frame = line_annotator_top.annotate(frame=frame, line_counter=stop_line_top)
+            frame = zones["line_annotator_top"].annotate(
+                frame=frame, line_counter=zones["stop_line_top"]
+            )
 
-            # d) Annotate Traffic Light ROI box
-            x1, y1, x2, y2 = adj_tl_bbox
+            # d) Annotate Traffic Light ROI
+            x1, y1, x2, y2 = zones["tl_bbox"]
             tl_color = (0, 0, 255) if tl_state == "RED" else (0, 255, 0)
             cv2.rectangle(frame, (x1, y1), (x2, y2), tl_color, 2)
             cv2.putText(
@@ -279,7 +290,7 @@ def main():
                 cv2.LINE_AA,
             )
 
-            # e) Annotate Tracked Objects
+            # e) Annotate detections
             labels = []
             for i in range(len(tracked_detections)):
                 t_id = (
@@ -296,62 +307,93 @@ def main():
                 scene=frame, detections=tracked_detections, labels=labels
             )
 
-            # f) Draw Top-Left HUD Dashboard
-            hud_bg = frame.copy()
-            cv2.rectangle(hud_bg, (15, 15), (380, 115), (20, 20, 20), -1)
-            cv2.addWeighted(hud_bg, 0.75, frame, 0.25, 0, frame)
-            cv2.rectangle(frame, (15, 15), (380, 115), (100, 100, 100), 1)
+            # f) Draw Top-Left Large Calibration HUD
+            hud_overlay = frame.copy()
+            cv2.rectangle(hud_overlay, (20, 20), (520, 150), (15, 15, 15), -1)
+            cv2.addWeighted(hud_overlay, 0.8, frame, 0.2, 0, frame)
+            cv2.rectangle(frame, (20, 20), (520, 150), (0, 255, 255), 2)
 
-            # Status Texts
+            # Prominent Offset Readout
             cv2.putText(
                 frame,
-                f"TRAFFIC LIGHT: {tl_state}",
-                (25, 42),
+                f"OFFSET: X={X_OFFSET:+d}, Y={Y_OFFSET:+d}",
+                (35, 60),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.65,
-                (0, 0, 255) if tl_state == "RED" else (0, 255, 0),
-                2,
+                1.0,
+                (0, 255, 255),
+                3,
                 cv2.LINE_AA,
             )
             cv2.putText(
                 frame,
-                f"Time: {t_sec:5.1f}s | Frame: {frame_idx}/{total_frames}",
-                (25, 68),
+                f"Keys: [W/A/S/D] or [Arrows] to nudge (+/- 5px)",
+                (35, 95),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.48,
-                (220, 220, 220),
+                0.52,
+                (255, 255, 255),
                 1,
                 cv2.LINE_AA,
             )
             cv2.putText(
                 frame,
-                f"Tracks: {len(tracked_detections)} | Tuning: X={x_off}, Y={y_off}",
-                (25, 94),
+                f"Light: {tl_state} | Tracks: {len(tracked_detections)} | [Q] to Save & Exit",
+                (35, 125),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (0, 215, 255),
+                0.52,
+                (0, 220, 100),
                 1,
                 cv2.LINE_AA,
             )
 
-        # Show frame directly (native 1080p display)
-        cv2.imshow(window_name, frame)
+            display_frame = frame
 
-        key = cv2.waitKey(1 if not paused else 30) & 0xFF
-        if key == ord("q") or key == 27:  # 'q' or ESC
-            print("\n[INFO] Exiting visualizer...")
+        # Show frame
+        if display_frame is not None:
+            cv2.imshow(window_name, display_frame)
+
+        # Listen for key events including extended keys (Arrow keys)
+        key = cv2.waitKeyEx(1 if not paused else 30)
+
+        if key in (ord("q"), ord("Q"), 27):  # 'q' or ESC -> Exit
             break
-        elif key == ord(" ") or key == ord("p"):  # Space or 'p' to toggle pause
+
+        # Up: W or Up Arrow
+        elif key in (ord("w"), ord("W"), 2490368, 65362, 0x260000):
+            Y_OFFSET -= 5
+            print(f"[CALIBRATE] X_OFFSET={X_OFFSET:+d}, Y_OFFSET={Y_OFFSET:+d}")
+
+        # Down: S or Down Arrow
+        elif key in (ord("s"), ord("S"), 2621440, 65364, 0x280000):
+            Y_OFFSET += 5
+            print(f"[CALIBRATE] X_OFFSET={X_OFFSET:+d}, Y_OFFSET={Y_OFFSET:+d}")
+
+        # Left: A or Left Arrow
+        elif key in (ord("a"), ord("A"), 2424832, 65361, 0x250000):
+            X_OFFSET -= 5
+            print(f"[CALIBRATE] X_OFFSET={X_OFFSET:+d}, Y_OFFSET={Y_OFFSET:+d}")
+
+        # Right: D or Right Arrow
+        elif key in (ord("d"), ord("D"), 2555904, 65363, 0x270000):
+            X_OFFSET += 5
+            print(f"[CALIBRATE] X_OFFSET={X_OFFSET:+d}, Y_OFFSET={Y_OFFSET:+d}")
+
+        # Pause / Resume: Space or 'p'
+        elif key in (ord(" "), ord("p"), ord("P")):
             paused = not paused
             print(f"[INFO] {'PAUSED' if paused else 'RESUMED'}")
-        elif key == ord("s") and paused:
-            # Step forward one frame
-            paused = False
-            ret, frame = cap.read()
-            paused = True
 
     cap.release()
     cv2.destroyAllWindows()
+
+    print("\n" + "=" * 60)
+    print("           CALIBRATION COMPLETED!           ")
+    print("=" * 60)
+    print(f"Final Calibrated Offsets:")
+    print(f"  X_OFFSET = {X_OFFSET:+d}")
+    print(f"  Y_OFFSET = {Y_OFFSET:+d}")
+    print("\nReady-to-use apply code for solution.py SCENE_CONFIG:")
+    print(f"  OFFSET = np.array([{X_OFFSET}, {Y_OFFSET}])")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":
