@@ -302,10 +302,17 @@ def get_history_point(
 
 
 def merge_same_class_segments(events: list[list]) -> list[list]:
-    """Merge overlapping or adjacent segments of the same class to conform to hackathon rules."""
+    """
+    Temporal smoothing and segment merger conforming to hackathon rules:
+    1. Groups events by class label.
+    2. Sorts segments chronologically by start_sec.
+    3. Merges segments of the same class if next_start - current_end <= 2.0 seconds.
+    4. Drops micro-fragments/blips where (end_sec - start_sec) < 0.5 seconds.
+    """
     if not events:
         return []
 
+    # 1. Group events by class label
     by_class: dict[str, list[list[float]]] = {}
     for item in events:
         s, e, label = float(item[0]), float(item[1]), str(item[2])
@@ -314,19 +321,27 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
 
     merged_out: list[list] = []
     for label, intervals in by_class.items():
+        # 2. Sort by start_sec
         intervals.sort(key=lambda x: x[0])
-        merged = [intervals[0]]
+        merged: list[list[float]] = [intervals[0]]
+
         for cur in intervals[1:]:
             prev = merged[-1]
-            if cur[0] <= prev[1]:  # overlap or contiguous
+            # 3. Merge Gap: If next_start - current_end <= 2.0 seconds, merge them
+            if cur[0] - prev[1] <= 2.0:
                 prev[1] = max(prev[1], cur[1])
             else:
                 merged.append(cur)
-        for s, e in merged:
-            merged_out.append([round(s, 3), round(e, 3), label])
 
+        # 4. Drop Blips: strictly discard any event where (end_sec - start_sec) < 0.5 seconds
+        for s, e in merged:
+            if (e - s) >= 0.5:
+                merged_out.append([round(s, 3), round(e, 3), label])
+
+    # Final sort across all merged events by start_sec, then end_sec
     merged_out.sort(key=lambda x: (x[0], x[1]))
     return merged_out
+
 
 
 def detect_events(video_path: str, progress_callback=None) -> list[list]:
@@ -859,6 +874,8 @@ class RiskEstimator:
         self.tracker = sv.ByteTrack()
         self.frame_count = 0
         self.last_risk = 0.0
+        self.track_history = {}
+        self.track_frames = {}
 
     def _compute_iou(self, box1: np.ndarray, box2: np.ndarray) -> float:
         """Compute Intersection over Union between two [x1, y1, x2, y2] boxes."""
@@ -912,48 +929,100 @@ class RiskEstimator:
         num_dets = len(tracked_detections)
 
         current_risk = 0.0
+        scale_to_640 = 640.0 / width if width > 0 else 1.0
 
         if num_dets > 0:
             xyxy = tracked_detections.xyxy
             class_ids = tracked_detections.class_id
+            tracker_ids = tracked_detections.tracker_id
 
-            # Vehicle indices for proximity & overlap collision checks
+            # Calculate speed (displacement in pixels per frame) for each track_id over the last 3-5 frames
+            speeds: dict[int, float] = {}
+            for k in range(num_dets):
+                t_id = int(tracker_ids[k]) if tracker_ids is not None and tracker_ids[k] is not None else k
+                box = xyxy[k]
+                cx = float((box[0] + box[2]) / 2.0) * scale_to_640
+                cy = float((box[1] + box[3]) / 2.0) * scale_to_640
+
+                # Reset history if track was lost for > 10 frames
+                if t_id in self.track_frames and self.track_frames[t_id]:
+                    if (self.frame_count - self.track_frames[t_id][-1]) > 10:
+                        self.track_history[t_id] = []
+                        self.track_frames[t_id] = []
+
+                if t_id not in self.track_history:
+                    self.track_history[t_id] = []
+                    self.track_frames[t_id] = []
+
+                self.track_history[t_id].append((cx, cy))
+                self.track_frames[t_id].append(self.frame_count)
+                if len(self.track_history[t_id]) > 5:
+                    self.track_history[t_id].pop(0)
+                    self.track_frames[t_id].pop(0)
+
+                hist = self.track_history[t_id]
+                frames = self.track_frames[t_id]
+                if len(hist) >= 2:
+                    p0 = hist[0]
+                    p1 = hist[-1]
+                    df = max(1, frames[-1] - frames[0])
+                    spd = float(np.hypot(p1[0] - p0[0], p1[1] - p0[1]) / df)
+                else:
+                    spd = 0.0
+                speeds[t_id] = spd
+
+            # Pedestrian Hazard: If a pedestrian is in the roadway (0.3 < x/width < 0.7 and y > height*0.4)
+            for i in range(num_dets):
+                if class_ids is not None and int(class_ids[i]) == 0:
+                    box = xyxy[i]
+                    px = (box[0] + box[2]) / 2.0
+                    py = (box[1] + box[3]) / 2.0
+                    if width > 0 and height > 0:
+                        if (0.3 < (px / width) < 0.7) and (py > height * 0.4):
+                            current_risk = max(current_risk, 0.45)
+
+            # Collision Course (TTC Proxy): Iterate through all pairs of tracked vehicles
             vehicle_indices = [
                 i for i in range(num_dets)
                 if class_ids is not None and int(class_ids[i]) in vehicle_classes
             ]
             num_vehicles = len(vehicle_indices)
 
-            scale_to_640 = 640.0 / width if width > 0 else 1.0
-
-            # Check for extreme proximity (Time-to-Collision substitute) between vehicle pairs
             for idx_a in range(num_vehicles):
                 i = vehicle_indices[idx_a]
                 box_i = xyxy[i]
-                cx_i = (box_i[0] + box_i[2]) / 2.0
-                cy_i = (box_i[1] + box_i[3]) / 2.0
+                cx_i = ((box_i[0] + box_i[2]) / 2.0) * scale_to_640
+                cy_i = ((box_i[1] + box_i[3]) / 2.0) * scale_to_640
+                t_id_i = int(tracker_ids[i]) if tracker_ids is not None and tracker_ids[i] is not None else i
+                spd_i = speeds.get(t_id_i, 0.0)
 
                 for idx_b in range(idx_a + 1, num_vehicles):
                     j = vehicle_indices[idx_b]
                     box_j = xyxy[j]
-                    cx_j = (box_j[0] + box_j[2]) / 2.0
-                    cy_j = (box_j[1] + box_j[3]) / 2.0
+                    cx_j = ((box_j[0] + box_j[2]) / 2.0) * scale_to_640
+                    cy_j = ((box_j[1] + box_j[3]) / 2.0) * scale_to_640
+                    t_id_j = int(tracker_ids[j]) if tracker_ids is not None and tracker_ids[j] is not None else j
+                    spd_j = speeds.get(t_id_j, 0.0)
 
-                    dist_640 = np.hypot(cx_i - cx_j, cy_i - cy_j) * scale_to_640
+                    dist = np.hypot(cx_i - cx_j, cy_i - cy_j)
                     iou = self._compute_iou(box_i, box_j)
 
-                    if dist_640 < 40.0 or iou > 0.6:
-                        current_risk = max(current_risk, 0.85)
+                    if dist < 50.0 or iou > 0.5:
+                        # CRITICAL CHECK: Check their speeds. If BOTH vehicles are moving at < 5.0 pixels/frame (i.e., a traffic jam), ignore them (risk remains low).
+                        if spd_i < 5.0 and spd_j < 5.0:
+                            continue
+                        # If AT LEAST ONE vehicle is moving fast (> 15.0 pixels/frame) while being extremely close, set current_risk = max(current_risk, 0.85) (Impending crash).
+                        if spd_i > 15.0 or spd_j > 15.0:
+                            current_risk = max(current_risk, 0.85)
 
-            # Check for sudden hazards: pedestrian near center of frame
-            for i in range(num_dets):
-                if class_ids is not None and int(class_ids[i]) == 0:
-                    box = xyxy[i]
-                    px = (box[0] + box[2]) / 2.0
-                    py = (box[1] + box[3]) / 2.0
-                    if (width * 0.3 < px < width * 0.7) and (py > height * 0.4):
-                        current_risk = max(current_risk, 0.60)
+        # Periodic cleanup of stale tracks (> 60 frames inactive)
+        if self.frame_count % 90 == 0:
+            stale_ids = [tid for tid, f_list in self.track_frames.items() if (self.frame_count - f_list[-1]) > 60]
+            for tid in stale_ids:
+                self.track_history.pop(tid, None)
+                self.track_frames.pop(tid, None)
 
-        # Exponential moving average smoothing to avoid erratic spikes
-        self.last_risk = (self.last_risk * 0.7) + (current_risk * 0.3)
+        # Smoothing & Decay: Use a strong decay so the risk naturally falls back to 0 when the hazard passes:
+        # self.last_risk = (self.last_risk * 0.85) + (current_risk * 0.15)
+        self.last_risk = (self.last_risk * 0.85) + (current_risk * 0.15)
         return float(np.clip(self.last_risk, 0.0, 1.0))
