@@ -300,12 +300,13 @@ def main():
                 tl_red_mask = np.zeros((250, 100), dtype=np.uint8)
                 tl_red_pixel_count = 0
 
-            # b) YOLO Detection & Tracking on 4K frame (imgsz=640 for fast real-time preview)
+            # b) YOLO Detection & Tracking on 4K frame (imgsz=640, half=True for fast real-time preview)
             results = model(
                 raw_frame,
                 verbose=False,
                 classes=list(COCO_ROAD_USERS.keys()),
                 imgsz=640,
+                half=True,
             )[0]
             detections = sv.Detections.from_ultralytics(results)
             tracked_detections = tracker.update_with_detections(detections)
