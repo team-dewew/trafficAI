@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-visualizer.py — Automated Auto-Aligned Live Visualizer for Traffic AI Challenge.
+visualizer.py — High-Precision 21-Zone Live Visualizer for Traffic AI Challenge.
 
 Features:
-- Automatic Template Matching Alignment on the first frame (identical to solution.py).
-- Initializes all 21 supervision zones and lines using ALIGNED_CONFIG (zero manual calibration).
-- Processes frames natively in 4K resolution, then scales to 1080p for smooth display.
+- Pure static 21-zone layout built directly from SCENE_CONFIG (zero alignment drift).
+- Processes frames natively in 4K resolution, downscaling to 1080p for smooth display.
 - Real-time YOLO detection & ByteTrack vehicle/pedestrian tracking.
 - Picture-in-Picture (PiP) Debug view in the top-right corner displaying:
-    1) High-resolution zoomed traffic light crop from ALIGNED_CONFIG.
+    1) High-resolution zoomed traffic light crop from SCENE_CONFIG["traffic_light_main_bbox"].
     2) Binary HSV Red Mask with exact pixel counts and detection state.
 
 Controls:
@@ -30,8 +29,6 @@ from solution import (
     SCENE_CONFIG,
     COCO_ROAD_USERS,
     get_traffic_light_state,
-    get_template_offset,
-    shift_scene_config,
 )
 
 
@@ -46,10 +43,10 @@ def find_default_video() -> str:
     return "samples/C3896.MP4"
 
 
-def build_aligned_zones(aligned_config: dict):
-    """Build all supervision zones and line counters directly in 4K coordinate space."""
+def build_scene_zones(config: dict):
+    """Build all supervision zones and line counters directly in 4K coordinate space from SCENE_CONFIG."""
     # 1. Stop Lines & Yield Line
-    stop_red_pts = aligned_config["stop_line_red"]
+    stop_red_pts = config["stop_line_red"]
     stop_line_red = sv.LineZone(
         start=sv.Point(x=int(stop_red_pts[0][0]), y=int(stop_red_pts[0][1])),
         end=sv.Point(x=int(stop_red_pts[1][0]), y=int(stop_red_pts[1][1])),
@@ -63,7 +60,7 @@ def build_aligned_zones(aligned_config: dict):
         display_out_count=False,
     )
 
-    stop_jam_pts = aligned_config["stop_line_jam"]
+    stop_jam_pts = config["stop_line_jam"]
     stop_line_jam = sv.LineZone(
         start=sv.Point(x=int(stop_jam_pts[0][0]), y=int(stop_jam_pts[0][1])),
         end=sv.Point(x=int(stop_jam_pts[1][0]), y=int(stop_jam_pts[1][1])),
@@ -77,7 +74,7 @@ def build_aligned_zones(aligned_config: dict):
         display_out_count=False,
     )
 
-    yield_pts = aligned_config["yield_ped_line"]
+    yield_pts = config["yield_ped_line"]
     yield_ped_line = sv.LineZone(
         start=sv.Point(x=int(yield_pts[0][0]), y=int(yield_pts[0][1])),
         end=sv.Point(x=int(yield_pts[1][0]), y=int(yield_pts[1][1])),
@@ -94,7 +91,7 @@ def build_aligned_zones(aligned_config: dict):
     # 2. Crosswalks
     crosswalk_annotators = []
     crosswalk_zones = []
-    for cw in aligned_config["crosswalks"]:
+    for cw in config["crosswalks"]:
         zone = sv.PolygonZone(polygon=cw)
         annotator = sv.PolygonZoneAnnotator(
             zone=zone,
@@ -106,7 +103,7 @@ def build_aligned_zones(aligned_config: dict):
         crosswalk_annotators.append(annotator)
 
     # 3. Traffic Islands
-    islands = aligned_config.get("forbidden_islands", aligned_config.get("islands", []))
+    islands = config.get("forbidden_islands", config.get("islands", []))
     island_annotators = []
     island_zones = []
     for isl in islands:
@@ -123,7 +120,7 @@ def build_aligned_zones(aligned_config: dict):
     # 4. Safe Sidewalks
     sidewalk_annotators = []
     sidewalk_zones = []
-    for sw in aligned_config["sidewalks"]:
+    for sw in config["sidewalks"]:
         zone = sv.PolygonZone(polygon=sw)
         annotator = sv.PolygonZoneAnnotator(
             zone=zone,
@@ -146,8 +143,8 @@ def build_aligned_zones(aligned_config: dict):
         sv.Color(r=100, g=149, b=237),
     ]
     for r_key, color in zip(road_keys, road_colors):
-        if r_key in aligned_config:
-            zone = sv.PolygonZone(polygon=aligned_config[r_key])
+        if r_key in config:
+            zone = sv.PolygonZone(polygon=config[r_key])
             annotator = sv.PolygonZoneAnnotator(
                 zone=zone,
                 color=color,
@@ -177,7 +174,7 @@ def build_aligned_zones(aligned_config: dict):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated Auto-Aligned Live Visualizer (21-Zone Setup)"
+        description="Static 21-Zone Live Visualizer for Traffic AI Challenge"
     )
     parser.add_argument(
         "--video",
@@ -205,7 +202,7 @@ def main():
         sys.exit(1)
 
     print("\n========================================================")
-    print("   TRAFFIC AI — AUTOMATED AUTO-ALIGNED VISUALIZER        ")
+    print("      TRAFFIC AI — STATIC 21-ZONE LIVE VISUALIZER       ")
     print("========================================================")
     print(f"[INFO] Video: {video_path.name}")
     print("[INFO] Controls:")
@@ -221,25 +218,8 @@ def main():
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
-    # 1. Automatic Template Matching Alignment on the first frame
-    ret, first_frame = cap.read()
-    if not ret or first_frame is None:
-        print("[ERROR] Failed to read first frame from video.", file=sys.stderr)
-        cap.release()
-        sys.exit(1)
-
-    dx, dy = get_template_offset(first_frame)
-    print(f"[Auto-Alignment] Shifted zones by dx={dx:+d}, dy={dy:+d}")
-
-    # Rewind video capture back to frame 0
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
-        cap.release()
-        cap = cv2.VideoCapture(str(video_path))
-
-    # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
-    ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
-    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
+    # 1. Traffic light bbox directly from static SCENE_CONFIG
+    tl_main_bbox = SCENE_CONFIG["traffic_light_main_bbox"]
 
     # 2. Initialize YOLO Model & ByteTrack
     print(f"[INFO] Loading {args.model} for real-time tracking...")
@@ -250,10 +230,10 @@ def main():
     box_annotator = sv.BoxAnnotator(thickness=3)
     label_annotator = sv.LabelAnnotator(text_scale=0.8, text_thickness=2)
 
-    # 3. Build supervision zones directly in 4K coordinate space
-    zones = build_aligned_zones(ALIGNED_CONFIG)
+    # 3. Build supervision zones directly in 4K coordinate space from static SCENE_CONFIG
+    zones = build_scene_zones(SCENE_CONFIG)
 
-    window_name = "Traffic AI Auto-Aligned Visualizer"
+    window_name = "Traffic AI Visualizer"
     frame_idx = 0
     paused = False
     display_frame = None
@@ -273,10 +253,10 @@ def main():
 
             t_sec = frame_idx / fps
 
-            # a) Evaluate traffic light state on high-resolution 4K frame using ALIGNED_CONFIG
+            # a) Evaluate traffic light state on high-resolution 4K frame using SCENE_CONFIG
             tl_state = get_traffic_light_state(raw_frame, tl_main_bbox)
 
-            # PiP Debug: Extract crop from original 4K frame using shifted bbox
+            # PiP Debug: Extract crop from original 4K frame directly using SCENE_CONFIG
             x1, y1, x2, y2 = tl_main_bbox
             raw_h, raw_w = raw_frame.shape[:2]
             csx1, csx2 = max(0, min(x1, raw_w)), max(0, min(x2, raw_w))
@@ -372,39 +352,39 @@ def main():
             # f) Downscale annotated 4K frame to 1080p for smooth display
             display_frame = cv2.resize(annotated_frame, (1920, 1080))
 
-            # g) Draw Top-Left Auto-Alignment HUD on display frame
+            # g) Draw Top-Left HUD on display frame
             hud_overlay = display_frame.copy()
-            cv2.rectangle(hud_overlay, (20, 20), (520, 150), (15, 15, 15), -1)
+            cv2.rectangle(hud_overlay, (20, 20), (520, 140), (15, 15, 15), -1)
             cv2.addWeighted(hud_overlay, 0.8, display_frame, 0.2, 0, display_frame)
-            cv2.rectangle(display_frame, (20, 20), (520, 150), (0, 255, 255), 2)
+            cv2.rectangle(display_frame, (20, 20), (520, 140), (0, 255, 255), 2)
 
             cv2.putText(
                 display_frame,
-                f"AUTO-ALIGN: dx={dx:+d}, dy={dy:+d}",
-                (35, 60),
+                "TRAFFIC AI — 21-ZONE MONITOR",
+                (35, 55),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                1.0,
+                0.8,
                 (0, 255, 255),
                 2,
                 cv2.LINE_AA,
             )
             cv2.putText(
                 display_frame,
-                "Template Matching: LOCKED (reference.jpg)",
-                (35, 95),
+                f"Time: {t_sec:.1f}s | Frame: {frame_idx}/{total_frames} | {'PAUSED' if paused else 'LIVE'}",
+                (35, 88),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,
-                (200, 255, 200),
+                (220, 220, 220),
                 1,
                 cv2.LINE_AA,
             )
             cv2.putText(
                 display_frame,
-                f"Time: {t_sec:.1f}s | Frame: {frame_idx}/{total_frames} | Tracks: {len(tracked_detections)}",
-                (35, 130),
+                f"Active Tracks: {len(tracked_detections)} | Light: {tl_state}",
+                (35, 120),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.52,
-                (255, 255, 255),
+                0.55,
+                (0, 255, 128),
                 1,
                 cv2.LINE_AA,
             )

@@ -151,87 +151,6 @@ def get_traffic_light_state(
     return "RED" if red_pixel_count > red_threshold else "GREEN"
 
 
-def shift_scene_config(
-    config: dict[str, list[np.ndarray] | np.ndarray | tuple[int, int, int, int]],
-    dx: int = 0,
-    dy: int = 0,
-) -> dict:
-    """Shift all coordinates in SCENE_CONFIG by (dx, dy) pixels."""
-    if dx == 0 and dy == 0:
-        return copy.deepcopy(config)
-
-    offset = np.array([dx, dy], dtype=np.int32)
-    shifted: dict = copy.deepcopy(config)
-    for key, val in shifted.items():
-        if isinstance(val, np.ndarray):
-            shifted[key] = val + offset
-        elif isinstance(val, list):
-            shifted[key] = [
-                (item + offset) if isinstance(item, np.ndarray) else copy.deepcopy(item)
-                for item in val
-            ]
-        elif key in ("traffic_light_main_bbox", "traffic_light_ped_bbox", "ped_bbox") or (
-            isinstance(val, tuple) and len(val) == 4
-        ):
-            x1, y1, x2, y2 = val
-            shifted[key] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
-
-    return shifted
-
-
-def get_template_offset(
-    first_frame: np.ndarray,
-    ref_path: Path | str | None = None,
-) -> tuple[int, int]:
-    """Compute translation offset (dx, dy) using Template Matching on a static anchor."""
-    dx, dy = 0, 0
-    original_x, original_y = 2200, 700
-    anchor_w, anchor_h = 200, 200
-
-    if ref_path is None:
-        p = Path("reference.jpg") if Path("reference.jpg").exists() else Path("reference.png")
-    else:
-        p = Path(ref_path)
-
-    if p.exists():
-        ref_gray = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
-        if ref_gray is not None:
-            first_frame_gray = (
-                cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
-                if len(first_frame.shape) == 3
-                else first_frame
-            )
-
-            # Crop static anchor from reference
-            anchor_gray = ref_gray[original_y : original_y + anchor_h, original_x : original_x + anchor_w]
-
-            # Match within localized search region around anchor (+/- 250px) to prevent false matches
-            h_f, w_f = first_frame_gray.shape[:2]
-            sy1 = max(0, original_y - 250)
-            sy2 = min(h_f, original_y + anchor_h + 250)
-            sx1 = max(0, original_x - 300)
-            sx2 = min(w_f, original_x + anchor_w + 300)
-            search_roi = first_frame_gray[sy1:sy2, sx1:sx2]
-
-            res = cv2.matchTemplate(search_roi, anchor_gray, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-            if max_val >= 0.35:
-                new_x = sx1 + max_loc[0]
-                new_y = sy1 + max_loc[1]
-                dx = int(new_x - original_x)
-                dy = int(new_y - original_y)
-            else:
-                # Fallback to full frame match with plausibility check
-                res_full = cv2.matchTemplate(first_frame_gray, anchor_gray, cv2.TM_CCOEFF_NORMED)
-                _, max_val_f, _, max_loc_f = cv2.minMaxLoc(res_full)
-                if max_val_f >= 0.5 and abs(max_loc_f[0] - original_x) < 350 and abs(max_loc_f[1] - original_y) < 300:
-                    dx = int(max_loc_f[0] - original_x)
-                    dy = int(max_loc_f[1] - original_y)
-
-    return dx, dy
-
-
 def get_direction(
     history: list[tuple[float, float, float]], dt: float = 1.0
 ) -> tuple[float, float]:
@@ -331,78 +250,61 @@ def detect_events(video_path: str) -> list[list]:
         A list of events, each [start_sec, end_sec, label] with
         0 <= start_sec < end_sec <= duration and label in CLASSES.
     """
-    # 1. Open video stream and read first frame for template matching alignment
+    # 1. Open video stream
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return []
 
-    ret, first_frame = cap.read()
-    if not ret or first_frame is None:
-        cap.release()
-        return []
-
-    # 2. Template Matching Auto-Alignment (Translation-only dx, dy)
-    dx, dy = get_template_offset(first_frame)
-
-    # Reset video capture back to frame 0
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
-        cap.release()
-        cap = cv2.VideoCapture(video_path)
-
-    # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
-    ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
-
-    # 3. External Kaggle Anomaly Model Interface
+    # 2. External Kaggle Anomaly Model Interface
     # Target complex classes: accident, near_miss, fire_smoke
     # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
     # anomaly_model = ...
     anomaly_model = None
 
-    # 4. Initialize YOLO detector
+    # 3. Initialize YOLO detector
     local_weights = Path("weights/yolov8s.pt")
     model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
     model = YOLO(model_path)
 
-    # 5. Initialize Line Zones using ALIGNED_CONFIG
-    stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
+    # 4. Initialize Line Zones directly using static SCENE_CONFIG
+    stop_red_pts = SCENE_CONFIG["stop_line_red"]
     stop_line_red = sv.LineZone(
         start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
         end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
 
-    stop_jam_pts = ALIGNED_CONFIG["stop_line_jam"]
+    stop_jam_pts = SCENE_CONFIG["stop_line_jam"]
     stop_line_jam = sv.LineZone(
         start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
         end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
 
-    yield_pts = ALIGNED_CONFIG["yield_ped_line"]
+    yield_pts = SCENE_CONFIG["yield_ped_line"]
     yield_ped_line = sv.LineZone(
         start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
         end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
     )
 
-    # 6. Initialize Grouped Polygon Zones using ALIGNED_CONFIG
-    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["crosswalks"]]
-    island_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["forbidden_islands"]]
-    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["sidewalks"]]
+    # 5. Initialize Grouped Polygon Zones directly using static SCENE_CONFIG
+    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["crosswalks"]]
+    island_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["forbidden_islands"]]
+    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["sidewalks"]]
 
     road_polygons = [
-        ALIGNED_CONFIG["lane_ltr"],
-        ALIGNED_CONFIG["lane_rtl"],
-        ALIGNED_CONFIG["intersection_core"],
-        ALIGNED_CONFIG["right_turn_zone"],
-        ALIGNED_CONFIG["lower_core"],
+        SCENE_CONFIG["lane_ltr"],
+        SCENE_CONFIG["lane_rtl"],
+        SCENE_CONFIG["intersection_core"],
+        SCENE_CONFIG["right_turn_zone"],
+        SCENE_CONFIG["lower_core"],
     ]
     road_zones = [sv.PolygonZone(polygon=p) for p in road_polygons]
 
-    lane_ltr_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_ltr"])
-    lane_rtl_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_rtl"])
-    intersection_core_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["intersection_core"])
-    right_turn_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["right_turn_zone"])
+    lane_ltr_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_ltr"])
+    lane_rtl_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_rtl"])
+    intersection_core_zone = sv.PolygonZone(polygon=SCENE_CONFIG["intersection_core"])
+    right_turn_zone = sv.PolygonZone(polygon=SCENE_CONFIG["right_turn_zone"])
 
-    # 7. Initialize Multi-Object Tracker (ByteTrack)
+    # 6. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
@@ -412,7 +314,7 @@ def detect_events(video_path: str) -> list[list]:
     frame_idx = 0
     events: list[list] = []
 
-    # 8. State tracking structures
+    # 7. State tracking structures
     track_history: dict[int, list[tuple[float, float, float]]] = {}
     last_seen_time: dict[int, float] = {}
 
@@ -427,7 +329,7 @@ def detect_events(video_path: str) -> list[list]:
     crossed_red_line_map: dict[int, bool] = {}
     crossed_jam_line_map: dict[int, bool] = {}
 
-    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
+    tl_main_bbox = SCENE_CONFIG["traffic_light_main_bbox"]
 
     while cap.isOpened():
         ret, frame = cap.read()
