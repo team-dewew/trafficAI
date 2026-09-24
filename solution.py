@@ -358,11 +358,9 @@ def detect_events(video_path: str) -> list[list]:
     # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
     ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
 
-    # 4. External Kaggle Anomaly Model Interface
-    # Target complex classes: accident, near_miss, fire_smoke
-    # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
-    # anomaly_model = ...
-    anomaly_model = None
+    # 4. External Anomaly Detection Model (accident, crash, fire, smoke)
+    anomaly_weights = Path("weights/accident_model.pt")
+    anomaly_model = YOLO(str(anomaly_weights)) if anomaly_weights.exists() else None
 
     # 5. Initialize Line Zones directly using ALIGNED_CONFIG
     stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
@@ -450,12 +448,17 @@ def detect_events(video_path: str) -> list[list]:
         tracked_detections = tracker.update_with_detections(detections)
         num_dets = len(tracked_detections)
 
-        # Placeholder: Run Kaggle anomaly model (accident, near_miss, fire_smoke)
-        if anomaly_model is not None:
-            # anomaly_preds = anomaly_model.predict(frame, t_sec)
-            # for pred in anomaly_preds:
-            #     events.append([pred["start_sec"], pred["end_sec"], pred["label"]])
-            pass
+        # Secondary Anomaly Model for Part A: accident & fire_smoke (run every 5 frames)
+        if anomaly_model is not None and frame_idx % 5 == 0:
+            anom_results = anomaly_model(frame, verbose=False, imgsz=640)[0]
+            for box in anom_results.boxes:
+                c_name = anomaly_model.names[int(box.cls[0])].lower()
+                conf = float(box.conf[0])
+                if conf > 0.45:
+                    if "acc" in c_name or "crash" in c_name or "colli" in c_name or c_name in {"high", "medium", "low", "detected-injury"}:
+                        events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "accident"])
+                    elif "fire" in c_name or "smoke" in c_name:
+                        events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "fire_smoke"])
 
         # c) Evaluate all zones on tracked detections using vectorized triggers
         in_any_road = np.zeros(num_dets, dtype=bool)
@@ -838,7 +841,30 @@ class RiskEstimator:
                 "n_frames": int}
         """
         self.meta = meta
-        self.last_score = 0.0
+        local_weights = Path("weights/yolov8n.pt")
+        model_path = str(local_weights) if local_weights.exists() else "yolov8n.pt"
+        self.model = YOLO(model_path)
+        self.tracker = sv.ByteTrack()
+        self.frame_count = 0
+        self.last_risk = 0.0
+
+    def _compute_iou(self, box1: np.ndarray, box2: np.ndarray) -> float:
+        """Compute Intersection over Union between two [x1, y1, x2, y2] boxes."""
+        xA = max(box1[0], box2[0])
+        yA = max(box1[1], box2[1])
+        xB = min(box1[2], box2[2])
+        yB = min(box1[3], box2[3])
+
+        inter_w = max(0.0, xB - xA)
+        inter_h = max(0.0, yB - yA)
+        inter_area = inter_w * inter_h
+        if inter_area == 0.0:
+            return 0.0
+
+        area1 = max(0.0, box1[2] - box1[0]) * max(0.0, box1[3] - box1[1])
+        area2 = max(0.0, box2[2] - box2[0]) * max(0.0, box2[3] - box2[1])
+        union = area1 + area2 - inter_area
+        return float(inter_area / union) if union > 0 else 0.0
 
     def step(self, frame: np.ndarray, t_sec: float) -> float:
         """Return P(accident starts within the next RISK_HORIZON_SEC s).
@@ -852,6 +878,70 @@ class RiskEstimator:
             previous score is fine; the harness still expects a value for
             every call.
         """
-        # TODO: replace this stub. A simple strong baseline: track vehicles,
-        # estimate time-to-collision between pairs, map min TTC -> risk.
-        return self.last_score
+        self.frame_count += 1
+
+        # Optimization: run YOLO tracking only every 3rd frame
+        if self.frame_count % 3 != 0:
+            return float(self.last_risk)
+
+        height, width = frame.shape[:2]
+        # COCO road user classes: pedestrian (0), bicycle (1), car (2), motorcycle (3), bus (5), truck (7)
+        target_classes = [0, 1, 2, 3, 5, 7]
+        vehicle_classes = {1, 2, 3, 5, 7}
+
+        results = self.model(
+            frame,
+            verbose=False,
+            imgsz=640,
+            classes=target_classes,
+        )[0]
+        detections = sv.Detections.from_ultralytics(results)
+        tracked_detections = self.tracker.update_with_detections(detections)
+        num_dets = len(tracked_detections)
+
+        current_risk = 0.0
+
+        if num_dets > 0:
+            xyxy = tracked_detections.xyxy
+            class_ids = tracked_detections.class_id
+
+            # Vehicle indices for proximity & overlap collision checks
+            vehicle_indices = [
+                i for i in range(num_dets)
+                if class_ids is not None and int(class_ids[i]) in vehicle_classes
+            ]
+            num_vehicles = len(vehicle_indices)
+
+            scale_to_640 = 640.0 / width if width > 0 else 1.0
+
+            # Check for extreme proximity (Time-to-Collision substitute) between vehicle pairs
+            for idx_a in range(num_vehicles):
+                i = vehicle_indices[idx_a]
+                box_i = xyxy[i]
+                cx_i = (box_i[0] + box_i[2]) / 2.0
+                cy_i = (box_i[1] + box_i[3]) / 2.0
+
+                for idx_b in range(idx_a + 1, num_vehicles):
+                    j = vehicle_indices[idx_b]
+                    box_j = xyxy[j]
+                    cx_j = (box_j[0] + box_j[2]) / 2.0
+                    cy_j = (box_j[1] + box_j[3]) / 2.0
+
+                    dist_640 = np.hypot(cx_i - cx_j, cy_i - cy_j) * scale_to_640
+                    iou = self._compute_iou(box_i, box_j)
+
+                    if dist_640 < 40.0 or iou > 0.6:
+                        current_risk = max(current_risk, 0.85)
+
+            # Check for sudden hazards: pedestrian near center of frame
+            for i in range(num_dets):
+                if class_ids is not None and int(class_ids[i]) == 0:
+                    box = xyxy[i]
+                    px = (box[0] + box[2]) / 2.0
+                    py = (box[1] + box[3]) / 2.0
+                    if (width * 0.3 < px < width * 0.7) and (py > height * 0.4):
+                        current_risk = max(current_risk, 0.60)
+
+        # Exponential moving average smoothing to avoid erratic spikes
+        self.last_risk = (self.last_risk * 0.7) + (current_risk * 0.3)
+        return float(np.clip(self.last_risk, 0.0, 1.0))
