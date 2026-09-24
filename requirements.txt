@@ -3,3 +3,4 @@ supervision
 numpy
 pandas
 opencv-python-headless
+streamlit

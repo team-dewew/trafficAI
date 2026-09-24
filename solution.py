@@ -16,10 +16,19 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
+import random
 import cv2
 import numpy as np
 import supervision as sv
+import torch
 from ultralytics import YOLO
+
+# Enforce deterministic execution (seed = 42)
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
 
 # Official class ids (14). See the task description for definitions and
 # start/end conventions. Remove entries you never predict; never add.
@@ -320,7 +329,7 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
     return merged_out
 
 
-def detect_events(video_path: str) -> list[list]:
+def detect_events(video_path: str, progress_callback=None) -> list[list]:
     """Part A — traffic event detection.
 
     Args:
@@ -433,6 +442,9 @@ def detect_events(video_path: str) -> list[list]:
             break
 
         t_sec = frame_idx / fps
+
+        if progress_callback and total_frames > 0 and frame_idx % 15 == 0:
+            progress_callback(frame_idx, total_frames)
 
         # a) Determine current main traffic light status
         tl_main_state = get_traffic_light_state(frame, tl_main_bbox)
