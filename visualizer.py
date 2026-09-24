@@ -189,8 +189,8 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="yolov8n.pt",
-        help="YOLO model (default: yolov8n.pt for fast live preview)",
+        default="yolo11l.pt",
+        help="YOLO model (default: yolo11l.pt for high accuracy)",
     )
     parser.add_argument(
         "--stride",

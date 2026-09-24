@@ -181,9 +181,9 @@ def shift_scene_config(
 
 def get_ai_offset(
     first_frame: np.ndarray,
-    model_path: str = "yolov8n.pt",
+    model_path: str = "yolo11l.pt",
 ) -> tuple[int, int]:
-    """Dynamically detect traffic light in first frame using YOLOv8 (COCO class 9)
+    """Dynamically detect traffic light in first frame using YOLO (COCO class 9)
     and calculate its offset (dx, dy) from reference center (2325, 790).
     """
     ref_center = (2325, 790)
@@ -340,8 +340,13 @@ def detect_events(video_path: str) -> list[list]:
         cap.release()
         return []
 
-    # 2. AI Auto-Alignment: detect traffic light displacement using YOLO
-    dx, dy = get_ai_offset(first_frame)
+    # 2. Initialize YOLO detector (YOLO11 Large)
+    local_weights = Path("weights/yolo11l.pt")
+    model_path = str(local_weights) if local_weights.exists() else "yolo11l.pt"
+    model = YOLO(model_path)
+
+    # 3. AI Auto-Alignment: detect traffic light displacement using YOLO
+    dx, dy = get_ai_offset(first_frame, model_path=model_path)
     print(f"[AI ALIGNMENT] Shifted by dx={dx:+d}, dy={dy:+d} using YOLO Traffic Light Detection")
 
     # Rewind video capture back to frame 0
@@ -353,16 +358,11 @@ def detect_events(video_path: str) -> list[list]:
     # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
     ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
 
-    # 3. External Kaggle Anomaly Model Interface
+    # 4. External Kaggle Anomaly Model Interface
     # Target complex classes: accident, near_miss, fire_smoke
     # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
     # anomaly_model = ...
     anomaly_model = None
-
-    # 4. Initialize YOLO detector
-    local_weights = Path("weights/yolov8s.pt")
-    model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
-    model = YOLO(model_path)
 
     # 5. Initialize Line Zones directly using ALIGNED_CONFIG
     stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
