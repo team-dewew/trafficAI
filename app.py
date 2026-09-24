@@ -815,55 +815,14 @@ elif selected_section == "Live Demo":
 
     st.markdown("---")
 
-    # Unified Execution Pipeline & Inference Parameters
-    st.markdown("#### 3. Execution Pipeline & Inference Control")
+    # Unified Execution Pipeline - Single Full Analysis Trigger
+    st.markdown("#### 3. Execution Pipeline")
 
-    exec_col1, exec_col2 = st.columns([1, 1])
-    is_sample_video = (input_choice == "Select Pre-loaded Benchmark Sample")
-
-    with exec_col1:
-        if is_sample_video:
-            inference_mode = st.radio(
-                "Select Inference Mode:",
-                [
-                    "⚡ Quick Live AI Demo (First 30s) — Recommended",
-                    "📊 Load Official Benchmark Evaluation (Instant 0.1s)",
-                    "🔬 Full Video Deep Inference (Complete Stream)",
-                ],
-                index=0,
-                help="Choose between rapid GPU model inference, instant benchmark inspection, or full stream analysis."
-            )
-        else:
-            inference_mode = st.radio(
-                "Select Inference Mode:",
-                [
-                    "⚡ Quick Live AI Demo (First 30s) — Recommended",
-                    "🔬 Full Video Deep Inference (Complete Stream)",
-                ],
-                index=0,
-                help="Choose analysis duration."
-            )
-
-    with exec_col2:
-        st.markdown(
-            """
-            <div style="background: rgba(15, 23, 42, 0.6); padding: 14px 18px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.85rem; line-height: 1.55;">
-                <div style="color: #38bdf8; font-weight: 700; margin-bottom: 6px;">⚡ ACTIVE PIPELINE TELEMETRY</div>
-                <div style="color: #cbd5e1;">• <b>Primary Perception</b>: YOLO11 Large (Classes: 0-7)</div>
-                <div style="color: #cbd5e1;">• <b>Spatial Geometry</b>: 21-Zone Vector Calibration</div>
-                <div style="color: #cbd5e1;">• <b>Temporal Tracking</b>: sv.ByteTrack (Causal)</div>
-                <div style="color: #cbd5e1;">• <b>Risk Horizon</b>: 5.0 seconds lookahead</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.write("")
     if target_video_path is not None:
         run_btn = st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
     else:
         st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
-        st.info("Select or upload a video above to enable the AI execution pipeline.")
+        st.info("Select a pre-loaded sample video or upload an MP4 feed above to enable execution.")
         run_btn = False
 
     if run_btn:
@@ -872,111 +831,77 @@ elif selected_section == "Live Demo":
             st.error(f"Target video file not found: `{target_video_path}`")
             st.stop()
 
-        # Check if user selected instant benchmark loading
-        if "Instant 0.1s" in inference_mode:
-            benchmark_path = Path("predictions_samples.json")
-            if benchmark_path.exists():
-                with open(benchmark_path, "r") as f:
-                    bench_data = json.load(f)
-                vid_data = bench_data.get("videos", {}).get(display_name, {})
-                if vid_data:
-                    bench_events = vid_data.get("events", [])
-                    bench_risk_raw = vid_data.get("risk", [])
-                    bench_timestamps = [p[0] for p in bench_risk_raw]
-                    bench_risk = [p[1] for p in bench_risk_raw]
+        progress_bar = st.progress(0.0)
+        status_text = st.empty()
+        start_time = time.time()
 
-                    st.session_state["cached_video"] = target_video_path
-                    st.session_state["cached_display_name"] = display_name
-                    st.session_state["cached_events"] = bench_events
-                    st.session_state["cached_risk"] = bench_risk
-                    st.session_state["cached_timestamps"] = bench_timestamps
-                    st.session_state["cached_elapsed"] = 0.05
-                    st.success(f"✅ Loaded official hackathon benchmark evaluation for `{display_name}` ({len(bench_events)} events, {len(bench_risk)} risk points)!")
-                else:
-                    st.error(f"Benchmark results for `{display_name}` not found in predictions_samples.json.")
-            else:
-                st.error("predictions_samples.json benchmark file not found.")
+        def update_progress(current, total):
+            pct = int((current / total * 100)) if total > 0 else 0
+            progress_bar.progress(min((current / total) * 0.70, 0.70) if total > 0 else 0.0)
+            elapsed = time.time() - start_time
+            fps = (current / elapsed) if elapsed > 0 else 0.0
+            eta = ((total - current) / fps) if fps > 0 else 0.0
+            status_text.markdown(f"⏳ Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
 
-        else:
-            # LIVE MODEL INFERENCE (YOLO11 + ByteTrack + 21 Zones)
-            max_secs = 30.0 if "First 30s" in inference_mode else None
+        try:
+            # Part A: Event Detection (Full Video Stream)
+            events = detect_events(str(target_resolved), progress_callback=update_progress)
+        except Exception as e:
+            st.error(f"Error during Part A Event Detection: {e}")
+            st.stop()
 
-            progress_bar = st.progress(0.0)
-            status_text = st.empty()
-            start_time = time.time()
+        # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
+        status_text.markdown("⚡ Initializing Causal Risk Estimator (Part B)...")
+        start_time_b = time.time()
 
-            def update_progress(current, total):
-                pct = int((current / total * 100)) if total > 0 else 0
-                progress_bar.progress(min((current / total) * 0.70, 0.70) if total > 0 else 0.0)
-                elapsed = time.time() - start_time
-                fps = (current / elapsed) if elapsed > 0 else 0.0
-                eta = ((total - current) / fps) if fps > 0 else 0.0
-                status_text.markdown(f"⏳ Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
+        cap = cv2.VideoCapture(str(target_resolved))
+        if not cap.isOpened():
+            st.error(f"Failed to open video file for Risk Estimator: `{target_video_path}`")
+            st.stop()
 
-            try:
-                # Part A: Event Detection with real-time callback and optional duration limit
-                events = detect_events(str(target_resolved), progress_callback=update_progress, max_seconds=max_secs)
-            except Exception as e:
-                st.error(f"Error during Part A Event Detection: {e}")
-                st.stop()
+        try:
+            fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 100)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
 
-            # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
-            status_text.markdown("⚡ Initializing Causal Risk Estimator (Part B)...")
-            start_time_b = time.time()
+            estimator = RiskEstimator()
+            estimator.reset(meta={
+                "video_id": display_name,
+                "fps": fps,
+                "n_frames": total_frames,
+                "width": width,
+                "height": height,
+            })
 
-            cap = cv2.VideoCapture(str(target_resolved))
-            if not cap.isOpened():
-                st.error(f"Failed to open video file for Risk Estimator: `{target_video_path}`")
-                st.stop()
+            risk_scores = []
+            timestamps = []
+            frame_idx = 0
 
-            try:
-                fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 100)
-                if max_secs is not None and fps > 0:
-                    total_frames = min(total_frames, int(max_secs * fps))
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    break
+                t_sec = frame_idx / fps
 
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
+                if frame_idx % 5 == 0:
+                    score = estimator.step(frame, t_sec)
+                    risk_scores.append(round(score, 4))
+                    timestamps.append(round(t_sec, 2))
 
-                estimator = RiskEstimator()
-                estimator.reset(meta={
-                    "video_id": display_name,
-                    "fps": fps,
-                    "n_frames": total_frames,
-                    "width": width,
-                    "height": height,
-                })
-
-                risk_scores = []
-                timestamps = []
-                frame_idx = 0
-
-                while cap.isOpened():
-                    ret, frame = cap.read()
-                    if not ret or frame is None:
-                        break
-                    t_sec = frame_idx / fps
-                    if max_secs is not None and t_sec > max_secs:
-                        break
-
-                    if frame_idx % 5 == 0:
-                        score = estimator.step(frame, t_sec)
-                        risk_scores.append(round(score, 4))
-                        timestamps.append(round(t_sec, 2))
-
-                        if total_frames > 0 and frame_idx % 15 == 0:
-                            pct_b = int((frame_idx / total_frames * 100))
-                            overall_pct = 0.70 + (min(frame_idx / total_frames, 1.0) * 0.30)
-                            progress_bar.progress(min(overall_pct, 1.0))
-                            elapsed_b = time.time() - start_time_b
-                            fps_b = (frame_idx / elapsed_b) if elapsed_b > 0 else 0.0
-                            status_text.markdown(f"⏳ Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed Time: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
-                    frame_idx += 1
-            except Exception as e:
-                st.error(f"Error during Part B Risk Estimation: {e}")
-                st.stop()
-            finally:
-                cap.release()
+                    if total_frames > 0 and frame_idx % 15 == 0:
+                        pct_b = int((frame_idx / total_frames * 100))
+                        overall_pct = 0.70 + (min(frame_idx / total_frames, 1.0) * 0.30)
+                        progress_bar.progress(min(overall_pct, 1.0))
+                        elapsed_b = time.time() - start_time_b
+                        fps_b = (frame_idx / elapsed_b) if elapsed_b > 0 else 0.0
+                        status_text.markdown(f"⏳ Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed Time: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
+                frame_idx += 1
+        except Exception as e:
+            st.error(f"Error during Part B Risk Estimation: {e}")
+            st.stop()
+        finally:
+            cap.release()
 
             total_elapsed = time.time() - start_time
             progress_bar.progress(1.0)

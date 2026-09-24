@@ -329,7 +329,7 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
     return merged_out
 
 
-def detect_events(video_path: str, progress_callback=None, max_seconds: float | None = None) -> list[list]:
+def detect_events(video_path: str, progress_callback=None) -> list[list]:
     """Part A — traffic event detection.
 
     Args:
@@ -416,9 +416,6 @@ def detect_events(video_path: str, progress_callback=None, max_seconds: float | 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
 
-    if max_seconds is not None and fps > 0 and total_frames > 0:
-        total_frames = min(total_frames, int(max_seconds * fps))
-
     frame_idx = 0
     events: list[list] = []
 
@@ -445,8 +442,6 @@ def detect_events(video_path: str, progress_callback=None, max_seconds: float | 
             break
 
         t_sec = frame_idx / fps
-        if max_seconds is not None and t_sec > max_seconds:
-            break
 
         if progress_callback and total_frames > 0 and frame_idx % 15 == 0:
             progress_callback(frame_idx, total_frames)
