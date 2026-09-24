@@ -98,7 +98,20 @@ COCO_ROAD_USERS = {
     7: "truck",
 }
 
+COCO_OBSTACLES = {
+    15: "cat",
+    16: "dog",
+    17: "horse",
+    18: "sheep",
+    19: "cow",
+    24: "backpack",
+    25: "umbrella",
+    28: "suitcase",
+}
+
+TARGET_COCO_CLASSES = {**COCO_ROAD_USERS, **COCO_OBSTACLES}
 VEHICLE_CLASSES = {"car", "bus", "truck", "motorcycle"}
+OBSTACLE_CLASSES = set(COCO_OBSTACLES.values())
 
 
 def get_traffic_light_state(
@@ -205,6 +218,28 @@ def get_speed(history: list[tuple[float, float, float]], dt: float = 1.0) -> flo
     return float(np.hypot(dx, dy))
 
 
+def get_history_point(
+    history: list[tuple[float, float, float]], dt_ago: float
+) -> tuple[float, float] | None:
+    """Find (x, y) point closest to `dt_ago` seconds in the past from the last tracked point."""
+    if not history:
+        return None
+    curr_t = history[-1][0]
+    target_t = curr_t - dt_ago
+    # Only return point if history extends back at least ~70% of dt_ago
+    if history[0][0] > target_t + (dt_ago * 0.3):
+        return None
+
+    best_p = history[0]
+    best_diff = abs(history[0][0] - target_t)
+    for p in history:
+        diff = abs(p[0] - target_t)
+        if diff < best_diff:
+            best_diff = diff
+            best_p = p
+    return (best_p[1], best_p[2])
+
+
 def merge_same_class_segments(events: list[list]) -> list[list]:
     """Merge overlapping or adjacent segments of the same class to conform to hackathon rules."""
     if not events:
@@ -308,6 +343,7 @@ def detect_events(video_path: str) -> list[list]:
     lane_ltr_zone = sv.PolygonZone(polygon=cfg["lane_ltr"])
     lane_rtl_zone = sv.PolygonZone(polygon=cfg["lane_rtl"])
     intersection_core_zone = sv.PolygonZone(polygon=cfg["intersection_core"])
+    right_turn_zone = sv.PolygonZone(polygon=cfg["right_turn_zone"])
 
     # 6. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
@@ -330,7 +366,10 @@ def detect_events(video_path: str) -> list[list]:
 
     # active_events[(track_id, label)] = {"label": str, "start_sec": float}
     active_events: dict[tuple[int, str], dict] = {}
+    global_events: dict[str, dict] = {}  # for zone-wide congestion tracking
     crossed_red_light_set: set[int] = set()
+    u_turn_set: set[int] = set()
+    illegal_turn_set: set[int] = set()
 
     # Line crossing states per vehicle track
     crossed_red_line_map: dict[int, bool] = {}
@@ -348,8 +387,8 @@ def detect_events(video_path: str) -> list[list]:
         # a) Determine current main traffic light status
         tl_main_state = get_traffic_light_state(frame, tl_main_bbox)
 
-        # b) Detect road users and update tracker
-        results = model(frame, verbose=False, classes=list(COCO_ROAD_USERS.keys()))[0]
+        # b) Detect road users & obstacles and update tracker
+        results = model(frame, verbose=False, classes=list(TARGET_COCO_CLASSES.keys()))[0]
         detections = sv.Detections.from_ultralytics(results)
         tracked_detections = tracker.update_with_detections(detections)
         num_dets = len(tracked_detections)
@@ -381,6 +420,7 @@ def detect_events(video_path: str) -> list[list]:
         in_lane_ltr = lane_ltr_zone.trigger(tracked_detections)
         in_lane_rtl = lane_rtl_zone.trigger(tracked_detections)
         in_intersection_core = intersection_core_zone.trigger(tracked_detections)
+        in_right_turn = right_turn_zone.trigger(tracked_detections)
 
         # Trigger Line Zones: returns (crossed_in, crossed_out)
         cin_red, cout_red = stop_line_red.trigger(tracked_detections)
@@ -391,6 +431,9 @@ def detect_events(video_path: str) -> list[list]:
 
         cin_yield, cout_yield = yield_ped_line.trigger(tracked_detections)
         crossed_yield_line = cin_yield | cout_yield
+
+        # Speed cache for congestion calculation
+        det_speeds: dict[int, float] = {}
 
         # Check if ANY pedestrian is currently inside ANY crosswalk in this frame
         pedestrian_on_crosswalk = False
@@ -414,24 +457,26 @@ def detect_events(video_path: str) -> list[list]:
             last_seen_time[track_id] = t_sec
 
             class_id = int(tracked_detections.class_id[i])
-            class_name = COCO_ROAD_USERS.get(class_id, "unknown")
+            class_name = TARGET_COCO_CLASSES.get(class_id, "unknown")
 
             # Calculate centroid (cx, cy)
             x1, y1, x2, y2 = tracked_detections.xyxy[i]
             cx = float((x1 + x2) / 2.0)
             cy = float((y1 + y2) / 2.0)
 
-            # Update movement trajectory history
+            # Update movement trajectory history (keep up to ~4 seconds)
             if track_id not in track_history:
                 track_history[track_id] = []
             track_history[track_id].append((t_sec, cx, cy))
 
-            if len(track_history[track_id]) > 100:
-                track_history[track_id] = track_history[track_id][-100:]
+            max_hist = max(150, int(4.0 * fps))
+            if len(track_history[track_id]) > max_hist:
+                track_history[track_id] = track_history[track_id][-max_hist:]
 
             # Calculate motion metrics over ~1 second
             dx, dy = get_direction(track_history[track_id], dt=1.0)
             speed = get_speed(track_history[track_id], dt=1.0)
+            det_speeds[i] = speed
 
             # Update line crossing memory for this vehicle
             if crossed_red_line[i]:
@@ -564,6 +609,107 @@ def detect_events(video_path: str) -> list[list]:
                             events.append([round(start_sec, 3), round(t_sec, 3), "stopped_vehicle"])
                         del active_events[stop_key]
 
+            # -------------------------------------------------------------
+            # 7. Logic for ROAD OBSTACLE:
+            # Animal or debris on carriageway stationary or crawling (speed < 5 px/s)
+            # -------------------------------------------------------------
+            ro_key = (track_id, "road_obstacle")
+            if class_name in OBSTACLE_CLASSES:
+                obs_speed = speed if speed != float("inf") else 0.0
+                is_obstacle = in_any_road[i] and (obs_speed < 5.0)
+
+                if is_obstacle:
+                    if ro_key not in active_events:
+                        active_events[ro_key] = {"label": "road_obstacle", "start_sec": t_sec}
+                else:
+                    if ro_key in active_events:
+                        start_sec = active_events[ro_key]["start_sec"]
+                        if (t_sec - start_sec) >= 1.0:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "road_obstacle"])
+                        del active_events[ro_key]
+
+            # -------------------------------------------------------------
+            # 8. Logic for ILLEGAL U-TURN:
+            # Vehicle reverses heading inside intersection_core (e.g. dx > 30 then dx < -30)
+            # -------------------------------------------------------------
+            if class_name in VEHICLE_CLASSES and in_intersection_core[i]:
+                if track_id not in u_turn_set:
+                    p_3s = get_history_point(track_history[track_id], dt_ago=3.0)
+                    p_1_5s = get_history_point(track_history[track_id], dt_ago=1.5)
+                    if p_3s is not None and p_1_5s is not None:
+                        dx_prev = p_1_5s[0] - p_3s[0]
+                        dx_curr = cx - p_1_5s[0]
+                        if (dx_prev > 30.0 and dx_curr < -30.0) or (dx_prev < -30.0 and dx_curr > 30.0):
+                            u_turn_set.add(track_id)
+                            events.append([round(max(0.0, t_sec - 1.5), 3), round(t_sec + 1.5, 3), "illegal_u_turn"])
+
+            # -------------------------------------------------------------
+            # 9. Logic for ILLEGAL TURN:
+            # Sharp 90-degree turn inside intersection_core but strictly outside right_turn_zone
+            # -------------------------------------------------------------
+            if class_name in VEHICLE_CLASSES and in_intersection_core[i] and not in_right_turn[i]:
+                if track_id not in illegal_turn_set and track_id not in u_turn_set:
+                    p_2s = get_history_point(track_history[track_id], dt_ago=2.0)
+                    p_1s = get_history_point(track_history[track_id], dt_ago=1.0)
+                    if p_2s is not None and p_1s is not None:
+                        dx_p = p_1s[0] - p_2s[0]
+                        dy_p = p_1s[1] - p_2s[1]
+                        dx_c = cx - p_1s[0]
+                        dy_c = cy - p_1s[1]
+                        if np.hypot(dx_p, dy_p) > 15.0 and np.hypot(dx_c, dy_c) > 15.0:
+                            h_to_v = (abs(dx_p) > abs(dy_p) * 2.0) and (abs(dy_c) > abs(dx_c) * 2.0)
+                            v_to_h = (abs(dy_p) > abs(dx_p) * 2.0) and (abs(dx_c) > abs(dy_c) * 2.0)
+                            if h_to_v or v_to_h:
+                                illegal_turn_set.add(track_id)
+                                events.append([round(max(0.0, t_sec - 1.5), 3), round(t_sec + 1.5, 3), "illegal_turn"])
+
+        # -----------------------------------------------------------------
+        # 10. Logic for CONGESTION (zone-wide lane crawl / standstill):
+        # -----------------------------------------------------------------
+        # Lane LTR
+        veh_ltr = [
+            i for i in range(num_dets)
+            if in_lane_ltr[i] and TARGET_COCO_CLASSES.get(int(tracked_detections.class_id[i]), "") in VEHICLE_CLASSES
+        ]
+        if len(veh_ltr) >= 4:
+            valid_speeds_ltr = [det_speeds[i] for i in veh_ltr if det_speeds.get(i, float("inf")) != float("inf")]
+            avg_speed_ltr = (sum(valid_speeds_ltr) / len(valid_speeds_ltr)) if valid_speeds_ltr else 0.0
+            is_cong_ltr = avg_speed_ltr < 5.0
+        else:
+            is_cong_ltr = False
+
+        if is_cong_ltr:
+            if "congestion_ltr" not in global_events:
+                global_events["congestion_ltr"] = {"start_sec": t_sec}
+        else:
+            if "congestion_ltr" in global_events:
+                s_sec = global_events["congestion_ltr"]["start_sec"]
+                if t_sec > s_sec:
+                    events.append([round(s_sec, 3), round(t_sec, 3), "congestion"])
+                del global_events["congestion_ltr"]
+
+        # Lane RTL
+        veh_rtl = [
+            i for i in range(num_dets)
+            if in_lane_rtl[i] and TARGET_COCO_CLASSES.get(int(tracked_detections.class_id[i]), "") in VEHICLE_CLASSES
+        ]
+        if len(veh_rtl) >= 4:
+            valid_speeds_rtl = [det_speeds[i] for i in veh_rtl if det_speeds.get(i, float("inf")) != float("inf")]
+            avg_speed_rtl = (sum(valid_speeds_rtl) / len(valid_speeds_rtl)) if valid_speeds_rtl else 0.0
+            is_cong_rtl = avg_speed_rtl < 5.0
+        else:
+            is_cong_rtl = False
+
+        if is_cong_rtl:
+            if "congestion_rtl" not in global_events:
+                global_events["congestion_rtl"] = {"start_sec": t_sec}
+        else:
+            if "congestion_rtl" in global_events:
+                s_sec = global_events["congestion_rtl"]["start_sec"]
+                if t_sec > s_sec:
+                    events.append([round(s_sec, 3), round(t_sec, 3), "congestion"])
+                del global_events["congestion_rtl"]
+
         # Close active events for tracks that disappeared from the camera view
         for (t_id, ev_label), ev_info in list(active_events.items()):
             if t_id not in current_frame_track_ids:
@@ -574,6 +720,9 @@ def detect_events(video_path: str) -> list[list]:
                     e = last_t
                     if ev_label == "stopped_vehicle":
                         if (e - s) >= 10.0:
+                            events.append([round(s, 3), round(e, 3), ev_label])
+                    elif ev_label == "road_obstacle":
+                        if (e - s) >= 1.0:
                             events.append([round(s, 3), round(e, 3), ev_label])
                     else:
                         if e > s:
@@ -587,12 +736,23 @@ def detect_events(video_path: str) -> list[list]:
     # Determine final video duration
     final_duration = duration_from_meta if duration_from_meta > 0 else (frame_idx / fps)
 
+    # Close any remaining global events (e.g. congestion)
+    for g_key, g_info in list(global_events.items()):
+        s_sec = g_info["start_sec"]
+        e_sec = final_duration
+        if e_sec > s_sec:
+            events.append([round(s_sec, 3), round(e_sec, 3), "congestion"])
+    global_events.clear()
+
     # Close any remaining active events at the end of the video
     for (t_id, ev_label), ev_info in list(active_events.items()):
         start_sec = ev_info["start_sec"]
         end_sec = final_duration
         if ev_label == "stopped_vehicle":
             if (end_sec - start_sec) >= 10.0:
+                events.append([round(start_sec, 3), round(end_sec, 3), ev_label])
+        elif ev_label == "road_obstacle":
+            if (end_sec - start_sec) >= 1.0:
                 events.append([round(start_sec, 3), round(end_sec, 3), ev_label])
         else:
             if end_sec > start_sec:
