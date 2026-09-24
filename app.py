@@ -309,7 +309,7 @@ def get_preview_media(target_path: str, selected_file_name: str) -> tuple[bytes 
     if preview_file.exists():
         try:
             with open(preview_file, "rb") as f:
-                return f.read(), f"720p Fast Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB • Instant Playback)"
+                return f.read(), f"Full Duration Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB • Instant Playback)"
         except Exception:
             pass
 
