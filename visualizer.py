@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-visualizer.py — Interactive Live Calibrator for Traffic AI.
+visualizer.py — High-precision 21-Zone Interactive Live Calibrator for Traffic AI.
 
 Live Calibration Controls:
   - W / Up Arrow:    Shift zones UP (Y_OFFSET -= 5)
@@ -58,84 +58,112 @@ def adjust_bbox(
 
 def build_zones_and_annotators(x_off: int, y_off: int, scale: float):
     """Rebuild all supervision zones and annotators with the current offsets."""
-    adj_stop_bottom = adjust_coordinates(
-        SCENE_CONFIG["stop_line_bottom"], x_off, y_off, scale
+    # 1. Line Zones
+    stop_red_pts = adjust_coordinates(SCENE_CONFIG["stop_line_red"], x_off, y_off, scale)
+    stop_line_red = sv.LineZone(
+        start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
+        end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
-    adj_stop_top = adjust_coordinates(
-        SCENE_CONFIG["stop_line_top"], x_off, y_off, scale
-    )
-    adj_road_area = adjust_coordinates(
-        SCENE_CONFIG["road_area"], x_off, y_off, scale
-    )
-    adj_zebra_main = adjust_coordinates(
-        SCENE_CONFIG["zebra_main"], x_off, y_off, scale
-    )
-    adj_zebra_left = adjust_coordinates(
-        SCENE_CONFIG["zebra_left"], x_off, y_off, scale
-    )
-    adj_tl_bbox = adjust_bbox(
-        SCENE_CONFIG["traffic_light_bbox"], x_off, y_off, scale
-    )
-
-    stop_line_bottom = sv.LineZone(
-        start=sv.Point(int(adj_stop_bottom[0][0]), int(adj_stop_bottom[0][1])),
-        end=sv.Point(int(adj_stop_bottom[1][0]), int(adj_stop_bottom[1][1])),
-    )
-    line_annotator_bottom = sv.LineZoneAnnotator(
+    line_annotator_red = sv.LineZoneAnnotator(
         thickness=2,
         color=sv.Color.RED,
         text_scale=0.5,
-        custom_in_text="Stop Bottom",
+        custom_in_text="Stop Red",
         custom_out_text="",
     )
 
-    stop_line_top = sv.LineZone(
-        start=sv.Point(int(adj_stop_top[0][0]), int(adj_stop_top[0][1])),
-        end=sv.Point(int(adj_stop_top[1][0]), int(adj_stop_top[1][1])),
+    stop_jam_pts = adjust_coordinates(SCENE_CONFIG["stop_line_jam"], x_off, y_off, scale)
+    stop_line_jam = sv.LineZone(
+        start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
+        end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
-    line_annotator_top = sv.LineZoneAnnotator(
+    line_annotator_jam = sv.LineZoneAnnotator(
         thickness=2,
         color=sv.Color(r=255, g=140, b=0),
         text_scale=0.5,
-        custom_in_text="Stop Top",
+        custom_in_text="Stop Jam",
         custom_out_text="",
     )
 
-    road_area_zone = sv.PolygonZone(polygon=adj_road_area)
-    road_annotator = sv.PolygonZoneAnnotator(
-        zone=road_area_zone,
-        color=sv.Color(r=30, g=144, b=255),
+    yield_pts = adjust_coordinates(SCENE_CONFIG["yield_ped_line"], x_off, y_off, scale)
+    yield_ped_line = sv.LineZone(
+        start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
+        end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
+    )
+    line_annotator_yield = sv.LineZoneAnnotator(
         thickness=2,
+        color=sv.Color(r=255, g=0, b=255),
         text_scale=0.5,
+        custom_in_text="Yield Line",
+        custom_out_text="",
     )
 
-    zebra_main_zone = sv.PolygonZone(polygon=adj_zebra_main)
-    zebra_main_annotator = sv.PolygonZoneAnnotator(
-        zone=zebra_main_zone,
-        color=sv.Color.YELLOW,
-        thickness=2,
-        text_scale=0.5,
-    )
+    # 2. Crosswalks
+    crosswalk_annotators = []
+    crosswalk_zones = []
+    for cw in SCENE_CONFIG["crosswalks"]:
+        adj_cw = adjust_coordinates(cw, x_off, y_off, scale)
+        zone = sv.PolygonZone(polygon=adj_cw)
+        annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.YELLOW, thickness=2, text_scale=0.45)
+        crosswalk_zones.append(zone)
+        crosswalk_annotators.append(annotator)
 
-    zebra_left_zone = sv.PolygonZone(polygon=adj_zebra_left)
-    zebra_left_annotator = sv.PolygonZoneAnnotator(
-        zone=zebra_left_zone,
-        color=sv.Color.YELLOW,
-        thickness=2,
-        text_scale=0.5,
-    )
+    # 3. Forbidden Concrete Islands
+    island_annotators = []
+    island_zones = []
+    for isl in SCENE_CONFIG["forbidden_islands"]:
+        adj_isl = adjust_coordinates(isl, x_off, y_off, scale)
+        zone = sv.PolygonZone(polygon=adj_isl)
+        annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color(r=255, g=20, b=147), thickness=2, text_scale=0.4)
+        island_zones.append(zone)
+        island_annotators.append(annotator)
+
+    # 4. Safe Sidewalks
+    sidewalk_annotators = []
+    sidewalk_zones = []
+    for sw in SCENE_CONFIG["sidewalks"]:
+        adj_sw = adjust_coordinates(sw, x_off, y_off, scale)
+        zone = sv.PolygonZone(polygon=adj_sw)
+        annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color(r=0, g=255, b=255), thickness=1, text_scale=0.4)
+        sidewalk_zones.append(zone)
+        sidewalk_annotators.append(annotator)
+
+    # 5. Road Polygons
+    road_annotators = []
+    road_zones = []
+    road_keys = ["lane_ltr", "lane_rtl", "intersection_core", "right_turn_zone", "lower_core"]
+    road_colors = [
+        sv.Color(r=30, g=144, b=255),
+        sv.Color(r=0, g=191, b=255),
+        sv.Color(r=138, g=43, b=226),
+        sv.Color(r=72, g=209, b=204),
+        sv.Color(r=100, g=149, b=237),
+    ]
+    for r_key, color in zip(road_keys, road_colors):
+        adj_r = adjust_coordinates(SCENE_CONFIG[r_key], x_off, y_off, scale)
+        zone = sv.PolygonZone(polygon=adj_r)
+        annotator = sv.PolygonZoneAnnotator(zone=zone, color=color, thickness=2, text_scale=0.45)
+        road_zones.append(zone)
+        road_annotators.append((annotator, r_key))
+
+    # 6. Traffic light bbox
+    adj_tl_bbox = adjust_bbox(SCENE_CONFIG["traffic_light_main_bbox"], x_off, y_off, scale)
 
     return {
-        "stop_line_bottom": stop_line_bottom,
-        "line_annotator_bottom": line_annotator_bottom,
-        "stop_line_top": stop_line_top,
-        "line_annotator_top": line_annotator_top,
-        "road_area_zone": road_area_zone,
-        "road_annotator": road_annotator,
-        "zebra_main_zone": zebra_main_zone,
-        "zebra_main_annotator": zebra_main_annotator,
-        "zebra_left_zone": zebra_left_zone,
-        "zebra_left_annotator": zebra_left_annotator,
+        "stop_line_red": stop_line_red,
+        "line_annotator_red": line_annotator_red,
+        "stop_line_jam": stop_line_jam,
+        "line_annotator_jam": line_annotator_jam,
+        "yield_ped_line": yield_ped_line,
+        "line_annotator_yield": line_annotator_yield,
+        "crosswalk_zones": crosswalk_zones,
+        "crosswalk_annotators": crosswalk_annotators,
+        "island_zones": island_zones,
+        "island_annotators": island_annotators,
+        "sidewalk_zones": sidewalk_zones,
+        "sidewalk_annotators": sidewalk_annotators,
+        "road_zones": road_zones,
+        "road_annotators": road_annotators,
         "tl_bbox": adj_tl_bbox,
     }
 
@@ -155,7 +183,7 @@ def main():
     global X_OFFSET, Y_OFFSET
 
     parser = argparse.ArgumentParser(
-        description="Traffic AI Realtime Interactive Calibrator"
+        description="Traffic AI Realtime Interactive Calibrator (21-Zone Setup)"
     )
     parser.add_argument(
         "--video",
@@ -183,7 +211,7 @@ def main():
         sys.exit(1)
 
     print(f"\n========================================================")
-    print(f"       TRAFFIC AI — INTERACTIVE LIVE CALIBRATOR         ")
+    print(f"   TRAFFIC AI — 21-ZONE INTERACTIVE LIVE CALIBRATOR     ")
     print(f"========================================================")
     print(f"[INFO] Video: {video_path.name}")
     print(f"[INFO] Controls:")
@@ -240,7 +268,7 @@ def main():
 
             t_sec = frame_idx / fps
 
-            # Immediately downscale 4K frame to 1080p for buttery smooth FPS
+            # Immediately downscale 4K frame to 1080p for smooth FPS
             frame = cv2.resize(raw_frame, (0, 0), fx=SCALE, fy=SCALE)
 
             # Rebuild zones if user changed offsets
@@ -261,18 +289,31 @@ def main():
             tracked_detections = tracker.update_with_detections(detections)
 
             # Update Line Zones
-            zones["stop_line_bottom"].trigger(tracked_detections)
-            zones["stop_line_top"].trigger(tracked_detections)
+            zones["stop_line_red"].trigger(tracked_detections)
+            zones["stop_line_jam"].trigger(tracked_detections)
+            zones["yield_ped_line"].trigger(tracked_detections)
 
             # c) Annotate shifted zones
-            frame = zones["road_annotator"].annotate(scene=frame, label="Road Area")
-            frame = zones["zebra_main_annotator"].annotate(scene=frame, label="Zebra Main")
-            frame = zones["zebra_left_annotator"].annotate(scene=frame, label="Zebra Left")
-            frame = zones["line_annotator_bottom"].annotate(
-                frame=frame, line_counter=zones["stop_line_bottom"]
+            for r_annotator, r_label in zones["road_annotators"]:
+                frame = r_annotator.annotate(scene=frame, label=r_label)
+
+            for cw_annotator in zones["crosswalk_annotators"]:
+                frame = cw_annotator.annotate(scene=frame, label="Crosswalk")
+
+            for isl_annotator in zones["island_annotators"]:
+                frame = isl_annotator.annotate(scene=frame, label="Island")
+
+            for sw_annotator in zones["sidewalk_annotators"]:
+                frame = sw_annotator.annotate(scene=frame, label="Sidewalk")
+
+            frame = zones["line_annotator_red"].annotate(
+                frame=frame, line_counter=zones["stop_line_red"]
             )
-            frame = zones["line_annotator_top"].annotate(
-                frame=frame, line_counter=zones["stop_line_top"]
+            frame = zones["line_annotator_jam"].annotate(
+                frame=frame, line_counter=zones["stop_line_jam"]
+            )
+            frame = zones["line_annotator_yield"].annotate(
+                frame=frame, line_counter=zones["yield_ped_line"]
             )
 
             # d) Annotate Traffic Light ROI

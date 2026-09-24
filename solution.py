@@ -44,57 +44,47 @@ CLASSES: list[str] = [
 RISK_HORIZON_SEC = 5.0
 
 # ----------------------------------------------------------------------------
-# Global Scene Configuration (calibrated for 4K 3840x2160 resolution)
+# High-Precision 21-Zone Scene Configuration (calibrated for 4K 3840x2160)
 # ----------------------------------------------------------------------------
-SCENE_CONFIG: dict[str, np.ndarray | tuple[int, int, int, int]] = {
-    # Stop lines (LineZone coordinates: 2 points [x, y])
-    "stop_line_bottom": np.array([[562, 1101], [1862, 933]], dtype=np.int32),
-    "stop_line_top": np.array([[2180, 947], [2396, 1018]], dtype=np.int32),
+SCENE_CONFIG: dict[str, list[np.ndarray] | np.ndarray | tuple[int, int, int, int]] = {
+    # LINES
+    "stop_line_red": np.array([[1878, 925], [481, 1111]], dtype=np.int32),      # strict red light stop
+    "stop_line_jam": np.array([[2164, 1048], [645, 1267]], dtype=np.int32),     # allowed to wait here in jam
+    "yield_ped_line": np.array([[2625, 1115], [3717, 977]], dtype=np.int32),    # Right side yield line
 
-    # Pedestrian Crossings (PolygonZone coordinates)
-    "zebra_main": np.array([
-        [646, 1271], [648, 1128], [1963, 955], [2435, 922], [3383, 865],
-        [3692, 985], [3761, 1023], [2750, 1176], [2652, 1206], [2551, 1255],
-        [2401, 1247], [1712, 1330], [653, 1371]
-    ], dtype=np.int32),
-    "zebra_left": np.array([
-        [682, 1375], [1618, 1768], [1858, 2158], [1015, 2158], [839, 2027],
-        [667, 1862], [465, 1761], [232, 1656], [337, 1557]
-    ], dtype=np.int32),
+    # CROSSWALKS (Zebras)
+    "crosswalks": [
+        np.array([[2150, 1033], [2410, 1137], [2413, 1181], [615, 1464], [671, 1378], [652, 1285], [619, 1245]], dtype=np.int32),
+        np.array([[3766, 988], [2633, 1126], [2603, 1092], [2558, 1092], [2491, 1092], [2380, 1037], [2376, 1025], [2373, 1014], [3439, 895]], dtype=np.int32),
+        np.array([[344, 1575], [656, 1404], [1005, 1590], [1355, 1757], [1440, 1828], [1496, 1835], [1930, 2155], [1132, 2159], [853, 1880], [664, 1750], [214, 1605]], dtype=np.int32),
+    ],
 
-    # Full Intersection Road Area (PolygonZone coordinates)
-    "road_area": np.array([
-        [1240, 1293], [2370, 1129], [2459, 1167], [2555, 1167], [2607, 1155],
-        [2637, 1141], [2633, 1103], [3183, 1048], [3714, 985], [3830, 1011],
-        [3833, 2125], [3818, 2151], [1820, 2151], [1757, 2099], [1508, 1832],
-        [1786, 1813], [1942, 1798], [1942, 1768], [1820, 1683], [1753, 1650],
-        [1608, 1676], [1444, 1694], [1381, 1728], [1359, 1765], [1017, 1590],
-        [1043, 1586], [1270, 1560], [1444, 1527], [1526, 1508], [1482, 1475],
-        [1344, 1386], [1270, 1367], [1218, 1382], [1129, 1479], [1032, 1546],
-        [985, 1570], [627, 1419], [672, 1378]
-    ], dtype=np.int32),
+    # ROAD SECTIONS
+    "lane_ltr": np.array([[1707, 847], [2198, 1055], [630, 1259], [441, 1096], [363, 1029], [43, 717], [21, 487], [62, 219], [166, 260], [192, 301], [463, 390], [1028, 591]], dtype=np.int32), # Left to Right
+    "lane_rtl": np.array([[2005, 880], [1459, 698], [1184, 598], [671, 427], [374, 331], [188, 260], [147, 178], [32, 115], [36, 78], [117, 78], [273, 115], [489, 193], [727, 260], [972, 308], [1184, 320], [1336, 360], [1670, 427], [2417, 624], [2711, 750], [3439, 929], [2399, 1029], [2176, 933]], dtype=np.int32), # Right to Left
+    "intersection_core": np.array([[2428, 1189], [2629, 1141], [3781, 996], [3836, 1018], [3836, 2028], [3836, 2133], [3810, 2155], [3714, 2155], [1949, 2155], [1511, 1835], [1949, 1791], [1945, 1772], [1745, 1642], [1392, 1709], [1362, 1742], [1031, 1594], [1533, 1508], [1317, 1363]], dtype=np.int32),
+    "right_turn_zone": np.array([[678, 1367], [1139, 1326], [1217, 1341], [1217, 1382], [1132, 1479], [1002, 1568], [641, 1746], [337, 1858], [155, 1936], [6, 2002], [10, 1750], [203, 1642], [511, 1505]], dtype=np.int32),
+    "lower_core": np.array([[6, 1947], [259, 1950], [853, 1898], [1106, 2147], [43, 2147], [6, 2129]], dtype=np.int32),
 
-    # Additional contextual regions
-    "sidewalk_left": np.array([
-        [300, 1572], [378, 1638], [642, 1750], [542, 1798], [337, 1869],
-        [244, 1910], [230, 1932], [270, 1947], [854, 1898], [1173, 2154],
-        [48, 2155], [7, 2136], [7, 1716]
-    ], dtype=np.int32),
-    "approach_bottom": np.array([
-        [363, 1029], [159, 836], [22, 661], [-1, 316], [140, 264],
-        [404, 368], [1013, 580], [1671, 828], [1854, 918], [802, 1045],
-        [495, 1094]
-    ], dtype=np.int32),
-    "road_top": np.array([
-        [2180, 947], [1664, 765], [1084, 568], [516, 372], [204, 267],
-        [62, 193], [66, 160], [92, 119], [170, 85], [289, 89],
-        [404, 152], [549, 212], [753, 245], [995, 286], [1199, 301],
-        [1296, 338], [1716, 431], [2076, 535], [2392, 598], [2581, 654],
-        [2670, 706], [2722, 754], [2838, 769], [3417, 918], [2396, 1018]
-    ], dtype=np.int32),
+    # CONCRETE ISLANDS & DIVIDERS (Cars entering here = violation / divider hit)
+    "forbidden_islands": [
+        np.array([[236, 1913], [645, 1754], [842, 1880], [608, 1917], [244, 1936]], dtype=np.int32),
+        np.array([[1016, 1568], [1225, 1393], [1288, 1367], [1511, 1497]], dtype=np.int32),
+        np.array([[1381, 1750], [1403, 1716], [1760, 1657], [1927, 1772], [1897, 1780], [1492, 1817], [1444, 1820]], dtype=np.int32),
+        np.array([[530, 379], [920, 513], [1410, 684], [1871, 836], [2205, 951], [2410, 1040], [2272, 1063], [2205, 1059], [1864, 899], [1358, 710], [838, 524], [526, 409], [229, 308], [184, 275], [229, 275]], dtype=np.int32),
+        np.array([[2543, 1063], [2603, 1066], [2647, 1122], [2618, 1152], [2517, 1163], [2443, 1148], [2369, 1092]], dtype=np.int32),
+    ],
 
-    # Traffic light region of interest (x1, y1, x2, y2)
-    "traffic_light_bbox": (2300, 730, 2345, 845),
+    # SAFE SIDEWALKS (Pedestrians here = safe)
+    "sidewalks": [
+        np.array([[114, 854], [470, 1148], [615, 1274], [656, 1349], [634, 1397], [500, 1471], [288, 1568], [6, 1702], [10, 1092], [10, 747]], dtype=np.int32),
+        np.array([[1076, 149], [1641, 275], [2194, 364], [2688, 457], [3357, 583], [3829, 717], [3825, 914], [3773, 944], [3721, 973], [3350, 884], [2792, 732], [2621, 687], [2387, 591], [1852, 457], [1425, 368], [1269, 316], [1087, 305], [935, 290], [808, 271], [615, 189], [604, 123], [719, 82], [987, 141]], dtype=np.int32),
+        np.array([[2216, 1051], [2410, 1029], [2532, 1070], [2347, 1111]], dtype=np.int32), # Ped island
+    ],
+
+    # TRAFFIC LIGHTS
+    "traffic_light_main_bbox": (2290, 720, 2360, 860),
+    "traffic_light_ped_bbox": (500, 1000, 560, 1120),
 }
 
 # Relevant COCO class IDs for detection & tracking
@@ -230,22 +220,41 @@ def detect_events(video_path: str) -> list[list]:
     model = YOLO(model_path)
 
     # 2. Initialize Line Zones
-    stop_bottom_arr = SCENE_CONFIG["stop_line_bottom"]
-    stop_line_bottom = sv.LineZone(
-        start=sv.Point(int(stop_bottom_arr[0][0]), int(stop_bottom_arr[0][1])),
-        end=sv.Point(int(stop_bottom_arr[1][0]), int(stop_bottom_arr[1][1])),
+    stop_red_pts = SCENE_CONFIG["stop_line_red"]
+    stop_line_red = sv.LineZone(
+        start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
+        end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
 
-    stop_top_arr = SCENE_CONFIG["stop_line_top"]
-    stop_line_top = sv.LineZone(
-        start=sv.Point(int(stop_top_arr[0][0]), int(stop_top_arr[0][1])),
-        end=sv.Point(int(stop_top_arr[1][0]), int(stop_top_arr[1][1])),
+    stop_jam_pts = SCENE_CONFIG["stop_line_jam"]
+    stop_line_jam = sv.LineZone(
+        start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
+        end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
 
-    # 3. Initialize Polygon Zones
-    zebra_main_zone = sv.PolygonZone(polygon=SCENE_CONFIG["zebra_main"])
-    zebra_left_zone = sv.PolygonZone(polygon=SCENE_CONFIG["zebra_left"])
-    road_area_zone = sv.PolygonZone(polygon=SCENE_CONFIG["road_area"])
+    yield_pts = SCENE_CONFIG["yield_ped_line"]
+    yield_ped_line = sv.LineZone(
+        start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
+        end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
+    )
+
+    # 3. Initialize Grouped Polygon Zones
+    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["crosswalks"]]
+    island_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["forbidden_islands"]]
+    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["sidewalks"]]
+
+    road_polygons = [
+        SCENE_CONFIG["lane_ltr"],
+        SCENE_CONFIG["lane_rtl"],
+        SCENE_CONFIG["intersection_core"],
+        SCENE_CONFIG["right_turn_zone"],
+        SCENE_CONFIG["lower_core"],
+    ]
+    road_zones = [sv.PolygonZone(polygon=p) for p in road_polygons]
+
+    lane_ltr_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_ltr"])
+    lane_rtl_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_rtl"])
+    intersection_core_zone = sv.PolygonZone(polygon=SCENE_CONFIG["intersection_core"])
 
     # 4. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
@@ -263,15 +272,18 @@ def detect_events(video_path: str) -> list[list]:
     events: list[list] = []
 
     # 6. State tracking structures
-    # track_history[track_id] = [(t_sec, cx, cy), ...]
     track_history: dict[int, list[tuple[float, float, float]]] = {}
     last_seen_time: dict[int, float] = {}
 
     # active_events[(track_id, label)] = {"label": str, "start_sec": float}
     active_events: dict[tuple[int, str], dict] = {}
-    crossed_red_light: set[int] = set()
+    crossed_red_light_set: set[int] = set()
 
-    tl_bbox = SCENE_CONFIG["traffic_light_bbox"]
+    # Line crossing states per vehicle track
+    crossed_red_line_map: dict[int, bool] = {}
+    crossed_jam_line_map: dict[int, bool] = {}
+
+    tl_main_bbox = SCENE_CONFIG["traffic_light_main_bbox"]
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -280,28 +292,57 @@ def detect_events(video_path: str) -> list[list]:
 
         t_sec = frame_idx / fps
 
-        # a) Determine current traffic light status
-        tl_state = get_traffic_light_state(frame, tl_bbox)
+        # a) Determine current main traffic light status
+        tl_main_state = get_traffic_light_state(frame, tl_main_bbox)
 
         # b) Detect road users and update tracker
         results = model(frame, verbose=False, classes=list(COCO_ROAD_USERS.keys()))[0]
         detections = sv.Detections.from_ultralytics(results)
         tracked_detections = tracker.update_with_detections(detections)
+        num_dets = len(tracked_detections)
 
-        # Evaluate all zones at once on tracked detections to get boolean masks
-        in_road = road_area_zone.trigger(tracked_detections)
-        in_zebra_main = zebra_main_zone.trigger(tracked_detections)
-        in_zebra_left = zebra_left_zone.trigger(tracked_detections)
+        # c) Evaluate all zones on tracked detections using vectorized triggers
+        in_any_road = np.zeros(num_dets, dtype=bool)
+        for rz in road_zones:
+            in_any_road |= rz.trigger(tracked_detections)
 
-        # LineZone trigger returns a tuple: (crossed_in, crossed_out)
-        crossed_in, crossed_out = stop_line_bottom.trigger(tracked_detections)
-        crossed_bottom = crossed_in | crossed_out
+        in_any_crosswalk = np.zeros(num_dets, dtype=bool)
+        for cz in crosswalk_zones:
+            in_any_crosswalk |= cz.trigger(tracked_detections)
 
-        # Track which IDs are seen in this frame
+        in_any_sidewalk = np.zeros(num_dets, dtype=bool)
+        for sz in sidewalk_zones:
+            in_any_sidewalk |= sz.trigger(tracked_detections)
+
+        in_any_island = np.zeros(num_dets, dtype=bool)
+        for iz in island_zones:
+            in_any_island |= iz.trigger(tracked_detections)
+
+        in_lane_ltr = lane_ltr_zone.trigger(tracked_detections)
+        in_lane_rtl = lane_rtl_zone.trigger(tracked_detections)
+        in_intersection_core = intersection_core_zone.trigger(tracked_detections)
+
+        # Trigger Line Zones: returns (crossed_in, crossed_out)
+        cin_red, cout_red = stop_line_red.trigger(tracked_detections)
+        crossed_red_line = cin_red | cout_red
+
+        cin_jam, cout_jam = stop_line_jam.trigger(tracked_detections)
+        crossed_jam_line = cin_jam | cout_jam
+
+        cin_yield, cout_yield = yield_ped_line.trigger(tracked_detections)
+        crossed_yield_line = cin_yield | cout_yield
+
+        # Check if ANY pedestrian is currently inside ANY crosswalk in this frame
+        pedestrian_on_crosswalk = False
+        for j in range(num_dets):
+            if tracked_detections.class_id[j] == 0 and in_any_crosswalk[j]:
+                pedestrian_on_crosswalk = True
+                break
+
         current_frame_track_ids: set[int] = set()
 
-        # c) Loop over tracked detections
-        for i in range(len(tracked_detections)):
+        # d) Loop over tracked detections
+        for i in range(num_dets):
             if tracked_detections.tracker_id is None:
                 continue
 
@@ -325,7 +366,6 @@ def detect_events(video_path: str) -> list[list]:
                 track_history[track_id] = []
             track_history[track_id].append((t_sec, cx, cy))
 
-            # Keep only the last ~100 entries (approx. 3-5 seconds of history)
             if len(track_history[track_id]) > 100:
                 track_history[track_id] = track_history[track_id][-100:]
 
@@ -333,18 +373,22 @@ def detect_events(video_path: str) -> list[list]:
             dx, dy = get_direction(track_history[track_id], dt=1.0)
             speed = get_speed(track_history[track_id], dt=1.0)
 
+            # Update line crossing memory for this vehicle
+            if crossed_red_line[i]:
+                crossed_red_line_map[track_id] = True
+            if crossed_jam_line[i]:
+                crossed_jam_line_map[track_id] = True
+
             # -------------------------------------------------------------
-            # 1. Logic for jaywalking:
+            # 1. Logic for JAYWALKING:
+            # Pedestrian on ANY road section, but NOT on crosswalks or sidewalks
             # -------------------------------------------------------------
             jw_key = (track_id, "jaywalking")
             if class_name == "pedestrian":
-                # Inside road area, but outside all authorized crosswalks
-                if in_road[i] and not in_zebra_main[i] and not in_zebra_left[i]:
+                is_jaywalking = in_any_road[i] and not in_any_crosswalk[i] and not in_any_sidewalk[i]
+                if is_jaywalking:
                     if jw_key not in active_events:
-                        active_events[jw_key] = {
-                            "label": "jaywalking",
-                            "start_sec": t_sec,
-                        }
+                        active_events[jw_key] = {"label": "jaywalking", "start_sec": t_sec}
                 else:
                     if jw_key in active_events:
                         start_sec = active_events[jw_key]["start_sec"]
@@ -353,33 +397,87 @@ def detect_events(video_path: str) -> list[list]:
                         del active_events[jw_key]
 
             # -------------------------------------------------------------
-            # 2. Logic for red_light:
+            # 2. Logic for RED LIGHT & STOP LINE:
             # -------------------------------------------------------------
             if class_name in VEHICLE_CLASSES:
-                if crossed_bottom[i] and tl_state == "RED":
-                    if track_id not in crossed_red_light:
-                        crossed_red_light.add(track_id)
+                # Red light running: crossing strict stop line on RED
+                if crossed_red_line[i] and tl_main_state == "RED":
+                    if track_id not in crossed_red_light_set:
+                        crossed_red_light_set.add(track_id)
                         events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "red_light"])
 
+                # Stop line violation: stopped past stop_line_red but before jam line / core on RED
+                sl_key = (track_id, "stop_line")
+                is_past_red_line = crossed_red_line_map.get(track_id, False)
+                is_in_intersection = in_intersection_core[i] or crossed_jam_line_map.get(track_id, False)
+                is_stopped_on_red = (
+                    is_past_red_line
+                    and not is_in_intersection
+                    and speed < 10.0
+                    and tl_main_state == "RED"
+                )
+
+                if is_stopped_on_red:
+                    if sl_key not in active_events:
+                        active_events[sl_key] = {"label": "stop_line", "start_sec": t_sec}
+                else:
+                    if sl_key in active_events:
+                        start_sec = active_events[sl_key]["start_sec"]
+                        if t_sec > start_sec:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "stop_line"])
+                        del active_events[sl_key]
+
             # -------------------------------------------------------------
-            # 3. Logic for wrong_way:
-            # Top lanes (y < 900): expected right-to-left, wrong if moving left-to-right (dx > 50)
-            # Bottom lanes (y > 1000): expected left-to-right, wrong if moving right-to-left (dx < -50)
+            # 3. Logic for FAILURE TO YIELD:
+            # Vehicle in crosswalk OR crossing yield line WHILE pedestrian is on crosswalk
+            # -------------------------------------------------------------
+            fty_key = (track_id, "failure_to_yield")
+            if class_name in VEHICLE_CLASSES:
+                vehicle_in_conflict_zone = in_any_crosswalk[i] or crossed_yield_line[i]
+                is_failing_yield = vehicle_in_conflict_zone and pedestrian_on_crosswalk
+
+                if is_failing_yield:
+                    if fty_key not in active_events:
+                        active_events[fty_key] = {"label": "failure_to_yield", "start_sec": t_sec}
+                else:
+                    if fty_key in active_events:
+                        start_sec = active_events[fty_key]["start_sec"]
+                        if t_sec > start_sec:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "failure_to_yield"])
+                        del active_events[fty_key]
+
+            # -------------------------------------------------------------
+            # 4. Logic for SOLID LINE CROSSING (Concrete islands / dividers):
+            # Vehicle enters any forbidden concrete divider / island
+            # -------------------------------------------------------------
+            slc_key = (track_id, "solid_line_crossing")
+            if class_name in VEHICLE_CLASSES:
+                if in_any_island[i]:
+                    if slc_key not in active_events:
+                        active_events[slc_key] = {"label": "solid_line_crossing", "start_sec": t_sec}
+                else:
+                    if slc_key in active_events:
+                        start_sec = active_events[slc_key]["start_sec"]
+                        if t_sec > start_sec:
+                            events.append([round(start_sec, 3), round(t_sec, 3), "solid_line_crossing"])
+                        del active_events[slc_key]
+
+            # -------------------------------------------------------------
+            # 5. Logic for WRONG WAY:
+            # - lane_ltr (expected left-to-right), moving right-to-left (dx < -30)
+            # - lane_rtl (expected right-to-left), moving left-to-right (dx > 30)
             # -------------------------------------------------------------
             ww_key = (track_id, "wrong_way")
             if class_name in VEHICLE_CLASSES:
                 is_wrong_way = False
-                if cy < 900 and dx > 50:
+                if in_lane_ltr[i] and dx < -30.0:
                     is_wrong_way = True
-                elif cy > 1000 and dx < -50:
+                elif in_lane_rtl[i] and dx > 30.0:
                     is_wrong_way = True
 
                 if is_wrong_way:
                     if ww_key not in active_events:
-                        active_events[ww_key] = {
-                            "label": "wrong_way",
-                            "start_sec": t_sec,
-                        }
+                        active_events[ww_key] = {"label": "wrong_way", "start_sec": t_sec}
                 else:
                     if ww_key in active_events:
                         start_sec = active_events[ww_key]["start_sec"]
@@ -388,24 +486,20 @@ def detect_events(video_path: str) -> list[list]:
                         del active_events[ww_key]
 
             # -------------------------------------------------------------
-            # 4. Logic for stopped_vehicle:
-            # Stationary (speed < 10 px in 1s) for >= 10.0 seconds
+            # 6. Logic for STOPPED VEHICLE:
+            # Stationary (speed < 10 px/s) on carriageway for >= 10.0 seconds
             # -------------------------------------------------------------
             stop_key = (track_id, "stopped_vehicle")
             if class_name in VEHICLE_CLASSES:
-                is_stopped = speed < 10.0
+                is_stopped = in_any_road[i] and (speed < 10.0)
 
                 if is_stopped:
                     if stop_key not in active_events:
-                        active_events[stop_key] = {
-                            "label": "stopped_vehicle",
-                            "start_sec": t_sec,
-                        }
+                        active_events[stop_key] = {"label": "stopped_vehicle", "start_sec": t_sec}
                 else:
                     if stop_key in active_events:
                         start_sec = active_events[stop_key]["start_sec"]
                         duration = t_sec - start_sec
-                        # Only log as violation if stationary for at least 10 seconds
                         if duration >= 10.0:
                             events.append([round(start_sec, 3), round(t_sec, 3), "stopped_vehicle"])
                         del active_events[stop_key]
