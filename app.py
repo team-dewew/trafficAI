@@ -9,8 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# Import core backend functions from solution
-from solution import CLASSES, RiskEstimator, detect_events
+from solution import CLASSES, SCENE_CONFIG, RiskEstimator, detect_events
 
 # ----------------------------------------------------------------------------
 # Page Configuration
@@ -220,6 +219,113 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# ----------------------------------------------------------------------------
+# Live Demo Utilities & Spatial Geometry Visualizers
+# ----------------------------------------------------------------------------
+@st.cache_data(show_spinner=False)
+def get_video_metadata(video_path: str) -> dict:
+    """Extract metadata (FPS, frames, duration, resolution, size) safely."""
+    try:
+        p = Path(video_path).resolve()
+        if not p.exists():
+            return {}
+        cap = cv2.VideoCapture(str(p))
+        if not cap.isOpened():
+            return {}
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
+        duration_sec = (total_frames / fps) if fps > 0 else 0.0
+        cap.release()
+        size_mb = p.stat().st_size / (1024 * 1024)
+        return {
+            "fps": round(fps, 2),
+            "total_frames": total_frames,
+            "width": width,
+            "height": height,
+            "duration_sec": round(duration_sec, 1),
+            "size_mb": round(size_mb, 1),
+            "resolution": f"{width} x {height}",
+        }
+    except Exception:
+        return {}
+
+
+@st.cache_data(show_spinner=False)
+def render_zone_overlay(video_path: str) -> np.ndarray | None:
+    """Generate Frame 0 visualization with the 21 spatial zones overlaid in color."""
+    try:
+        p = Path(video_path).resolve()
+        if not p.exists():
+            return None
+        cap = cv2.VideoCapture(str(p))
+        if not cap.isOpened():
+            return None
+        ret, frame = cap.read()
+        cap.release()
+        if not ret or frame is None:
+            return None
+
+        vis = frame.copy()
+        # Draw Stop Line Red
+        if "stop_line_red" in SCENE_CONFIG:
+            p1, p2 = SCENE_CONFIG["stop_line_red"]
+            cv2.line(vis, tuple(p1), tuple(p2), (0, 0, 255), 6)
+            cv2.putText(vis, "STOP LINE (RED)", (int(p1[0]), int(p1[1]) - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+        # Draw Stop Line Jam
+        if "stop_line_jam" in SCENE_CONFIG:
+            j1, j2 = SCENE_CONFIG["stop_line_jam"]
+            cv2.line(vis, tuple(j1), tuple(j2), (0, 255, 255), 5)
+            cv2.putText(vis, "JAM LINE", (int(j1[0]), int(j1[1]) - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
+        # Draw Crosswalks (Zebras)
+        for cw in SCENE_CONFIG.get("crosswalks", []):
+            cv2.polylines(vis, [cw], isClosed=True, color=(255, 180, 0), thickness=4)
+        # Draw Forbidden Concrete Islands
+        for isl in SCENE_CONFIG.get("forbidden_islands", []):
+            cv2.polylines(vis, [isl], isClosed=True, color=(200, 0, 255), thickness=4)
+        # Draw Travel Lanes
+        for lane_key in ["lane_ltr", "lane_rtl"]:
+            if lane_key in SCENE_CONFIG:
+                cv2.polylines(vis, [SCENE_CONFIG[lane_key]], isClosed=True, color=(0, 255, 120), thickness=3)
+
+        # Convert to RGB and resize to 720p for fast web rendering
+        vis_rgb = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
+        return cv2.resize(vis_rgb, (1280, 720))
+    except Exception:
+        return None
+
+
+def get_preview_media(target_path: str, selected_file_name: str) -> tuple[bytes | None, str]:
+    """
+    Returns (video_bytes, status_description) for instant video playback.
+    Uses pre-rendered 720p web clips for sample videos to eliminate socket crashes & lag.
+    """
+    target_p = Path(target_path).resolve()
+    stem = Path(selected_file_name).stem
+    # Check for fast web preview clip in samples/previews/
+    preview_file = Path("samples/previews") / f"{stem}_preview.mp4"
+    if preview_file.exists():
+        try:
+            with open(preview_file, "rb") as f:
+                return f.read(), f"720p Fast Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB • Instant Playback)"
+        except Exception:
+            pass
+
+    # For uploaded or smaller videos (< 150MB)
+    if target_p.exists():
+        sz = target_p.stat().st_size
+        if sz <= 150 * 1024 * 1024:
+            try:
+                with open(target_p, "rb") as f:
+                    return f.read(), f"Direct Stream ({sz / (1024*1024):.1f} MB)"
+            except Exception as e:
+                return None, f"Error: {e}"
+        else:
+            return None, f"Ultra-HD 4K Raw Feed ({sz / (1024**3):.2f} GB). Ready for deep learning inference."
+    return None, "Video file not found."
+
 
 # ----------------------------------------------------------------------------
 # Sidebar Navigation (EXACT 6 SECTIONS AS REQUIRED BY RUBRIC)
@@ -557,16 +663,12 @@ elif selected_section == "Results on sample videos":
     with col_res1:
         st.markdown("### 🎬 Annotated Video Feed Playback")
         selected_vid = st.selectbox("Select Feed to Inspect:", ["samples/C3905.MP4", "samples/C3896.MP4", "samples/C3902.MP4"])
-        feed_path = Path(selected_vid).resolve()
-        if feed_path.exists():
-            try:
-                with open(feed_path, "rb") as f_feed:
-                    st.video(f_feed.read())
-                st.caption(f"Inspecting feed: `{selected_vid}`")
-            except Exception as e:
-                st.error(f"Error loading preview for `{selected_vid}`: {e}")
+        feed_bytes, feed_desc = get_preview_media(selected_vid, selected_vid)
+        if feed_bytes is not None:
+            st.video(feed_bytes)
+            st.caption(f"Inspecting feed: `{selected_vid}` • {feed_desc}")
         else:
-            st.error(f"Sample feed not found: `{selected_vid}`")
+            st.info(f"Feed info: {feed_desc}")
 
     with col_res2:
         st.markdown("### ⚠️ Honest Failure Cases & Edge Analyses")
@@ -617,11 +719,11 @@ elif selected_section == "Live Demo":
         st.markdown("#### 1. Video Source Selection")
         input_choice = st.radio(
             "Choose Input Mode:",
-            ["Select Pre-loaded Sample", "Upload Video File"],
+            ["Select Pre-loaded Benchmark Sample", "Upload Custom Surveillance Video (.mp4)"],
             horizontal=True,
         )
 
-        if input_choice == "Select Pre-loaded Sample":
+        if input_choice == "Select Pre-loaded Benchmark Sample":
             samples_dir = Path("samples")
             if not samples_dir.exists():
                 samples_dir = (Path(__file__).resolve().parent / "samples")
@@ -632,10 +734,10 @@ elif selected_section == "Live Demo":
                 found_samples = sorted([p.name for p in samples_dir.glob("*.mp4")] + [p.name for p in samples_dir.glob("*.MP4")])
 
             sample_labels = {
-                "C3905.MP4": "C3905.MP4 (Short Daytime - 2m 07s)",
-                "C3896.MP4": "C3896.MP4 (Daytime Traffic - 5m 40s)",
-                "C3897.MP4": "C3897.MP4 (Dense Traffic - 5m 17s)",
-                "C3902.MP4": "C3902.MP4 (Evening Shifted - 5m 17s)",
+                "C3905.MP4": "C3905.MP4 (Short Daytime - 2m 07s | 4K UHD)",
+                "C3896.MP4": "C3896.MP4 (Daytime Traffic - 5m 40s | 4K UHD)",
+                "C3897.MP4": "C3897.MP4 (Dense Traffic - 5m 17s | 4K UHD)",
+                "C3902.MP4": "C3902.MP4 (Evening Shifted - 5m 17s | 4K UHD)",
             }
 
             if found_samples:
@@ -653,7 +755,7 @@ elif selected_section == "Live Demo":
             else:
                 st.error("No sample videos found in `samples/` directory.")
 
-        elif input_choice == "Upload Video File":
+        elif input_choice == "Upload Custom Surveillance Video (.mp4)":
             uploaded_file = st.file_uploader(
                 "Upload Video File (.mp4) - Up to 10GB",
                 type=["mp4", "MP4"],
@@ -661,41 +763,107 @@ elif selected_section == "Live Demo":
             )
             if uploaded_file is not None:
                 upload_destination = Path("temp_uploaded.mp4").resolve()
-                with open(upload_destination, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                # Only write to disk when file is newly uploaded to avoid freezing every rerun
+                current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+                if st.session_state.get("last_uploaded_id") != current_file_id:
+                    with open(upload_destination, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.session_state["last_uploaded_id"] = current_file_id
+
                 target_video_path = "temp_uploaded.mp4"
                 display_name = uploaded_file.name
                 st.success(f"Video uploaded successfully: `{display_name}` ({uploaded_file.size / (1024*1024):.1f} MB)")
 
+        # Metadata telemetry banner
+        if target_video_path and Path(target_video_path).exists():
+            meta = get_video_metadata(target_video_path)
+            if meta:
+                st.markdown(
+                    f"""
+                    <div style="background: rgba(14, 22, 38, 0.85); border: 1px solid rgba(0, 210, 255, 0.25); border-radius: 8px; padding: 12px 16px; margin-top: 14px; font-size: 0.86rem; line-height: 1.6;">
+                        <span style="color:#00f2fe; font-weight:700;">📐 STREAM TELEMETRY</span><br>
+                        <span style="color:#94a3b8;">Resolution:</span> <b>{meta.get('resolution')}</b> &nbsp;|&nbsp; 
+                        <span style="color:#94a3b8;">Framerate:</span> <b>{meta.get('fps')} FPS</b><br>
+                        <span style="color:#94a3b8;">Duration:</span> <b>{meta.get('duration_sec')}s ({meta.get('total_frames')} frames)</b> &nbsp;|&nbsp; 
+                        <span style="color:#94a3b8;">Disk Size:</span> <b>{meta.get('size_mb')} MB</b>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
     with col2:
-        st.markdown("#### 2. Video Player Preview")
-        if target_video_path is not None:
-            resolved_target = Path(target_video_path).resolve()
-            if resolved_target.exists():
-                try:
-                    with open(resolved_target, "rb") as video_file:
-                        video_bytes = video_file.read()
-                        st.video(video_bytes)
-                    st.caption(f"Active Source: `{display_name}` | File: `{resolved_target.name}`")
-                except FileNotFoundError:
-                    st.error(f"Video preview error: File not found at `{resolved_target}`")
-                except Exception as e:
-                    st.error(f"Failed to play video preview: {e}")
-            else:
-                st.error(f"Target video does not exist: `{target_video_path}`")
+        st.markdown("#### 2. Video Player & Spatial Geometry")
+        if target_video_path is not None and Path(target_video_path).exists():
+            preview_tabs = st.tabs(["🎬 Live Video Player", "🗺️ 21-Zone Spatial Geometry Overlay"])
+
+            with preview_tabs[0]:
+                preview_bytes, preview_status = get_preview_media(target_video_path, display_name)
+                if preview_bytes is not None:
+                    st.video(preview_bytes)
+                    st.caption(f"Active Feed: `{display_name}` • {preview_status}")
+                else:
+                    st.info(f"📹 {preview_status}")
+
+            with preview_tabs[1]:
+                zone_vis = render_zone_overlay(target_video_path)
+                if zone_vis is not None:
+                    st.image(zone_vis, caption="Vectorized Spatial Map: Red Stop Line (Red), Jam Line (Yellow), Crosswalk Zebras (Blue), Concrete Dividers (Magenta), Travel Lanes (Green)", use_container_width=True)
+                else:
+                    st.caption("Spatial calibration map unavailable for this feed.")
         else:
             st.info("Upload an MP4 file or select a pre-loaded sample above to activate preview.")
 
     st.markdown("---")
 
-    # Unified Execution Pipeline - Placed outside if-blocks so it appears regardless of input mode
-    st.markdown("#### 3. Execution Pipeline")
+    # Unified Execution Pipeline & Inference Parameters
+    st.markdown("#### 3. Execution Pipeline & Inference Control")
 
+    exec_col1, exec_col2 = st.columns([1, 1])
+    is_sample_video = (input_choice == "Select Pre-loaded Benchmark Sample")
+
+    with exec_col1:
+        if is_sample_video:
+            inference_mode = st.radio(
+                "Select Inference Mode:",
+                [
+                    "⚡ Quick Live AI Demo (First 30s) — Recommended",
+                    "📊 Load Official Benchmark Evaluation (Instant 0.1s)",
+                    "🔬 Full Video Deep Inference (Complete Stream)",
+                ],
+                index=0,
+                help="Choose between rapid GPU model inference, instant benchmark inspection, or full stream analysis."
+            )
+        else:
+            inference_mode = st.radio(
+                "Select Inference Mode:",
+                [
+                    "⚡ Quick Live AI Demo (First 30s) — Recommended",
+                    "🔬 Full Video Deep Inference (Complete Stream)",
+                ],
+                index=0,
+                help="Choose analysis duration."
+            )
+
+    with exec_col2:
+        st.markdown(
+            """
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 14px 18px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.85rem; line-height: 1.55;">
+                <div style="color: #38bdf8; font-weight: 700; margin-bottom: 6px;">⚡ ACTIVE PIPELINE TELEMETRY</div>
+                <div style="color: #cbd5e1;">• <b>Primary Perception</b>: YOLO11 Large (Classes: 0-7)</div>
+                <div style="color: #cbd5e1;">• <b>Spatial Geometry</b>: 21-Zone Vector Calibration</div>
+                <div style="color: #cbd5e1;">• <b>Temporal Tracking</b>: sv.ByteTrack (Causal)</div>
+                <div style="color: #cbd5e1;">• <b>Risk Horizon</b>: 5.0 seconds lookahead</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.write("")
     if target_video_path is not None:
-        run_btn = st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
+        run_btn = st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
     else:
-        st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
-        st.info("Select a pre-loaded sample video or upload an MP4 feed above to enable execution.")
+        st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
+        st.info("Select or upload a video above to enable the AI execution pipeline.")
         run_btn = False
 
     if run_btn:
@@ -704,87 +872,123 @@ elif selected_section == "Live Demo":
             st.error(f"Target video file not found: `{target_video_path}`")
             st.stop()
 
-        # Setup real-time progress feedback
-        progress_bar = st.progress(0.0)
-        status_text = st.empty()
+        # Check if user selected instant benchmark loading
+        if "Instant 0.1s" in inference_mode:
+            benchmark_path = Path("predictions_samples.json")
+            if benchmark_path.exists():
+                with open(benchmark_path, "r") as f:
+                    bench_data = json.load(f)
+                vid_data = bench_data.get("videos", {}).get(display_name, {})
+                if vid_data:
+                    bench_events = vid_data.get("events", [])
+                    bench_risk_raw = vid_data.get("risk", [])
+                    bench_timestamps = [p[0] for p in bench_risk_raw]
+                    bench_risk = [p[1] for p in bench_risk_raw]
 
-        start_time = time.time()
+                    st.session_state["cached_video"] = target_video_path
+                    st.session_state["cached_display_name"] = display_name
+                    st.session_state["cached_events"] = bench_events
+                    st.session_state["cached_risk"] = bench_risk
+                    st.session_state["cached_timestamps"] = bench_timestamps
+                    st.session_state["cached_elapsed"] = 0.05
+                    st.success(f"✅ Loaded official hackathon benchmark evaluation for `{display_name}` ({len(bench_events)} events, {len(bench_risk)} risk points)!")
+                else:
+                    st.error(f"Benchmark results for `{display_name}` not found in predictions_samples.json.")
+            else:
+                st.error("predictions_samples.json benchmark file not found.")
 
-        def update_progress(current, total):
-            pct = int((current / total * 100)) if total > 0 else 0
-            progress_bar.progress(min((current / total) * 0.70, 0.70) if total > 0 else 0.0)
-            elapsed = time.time() - start_time
-            status_text.markdown(f"⏳ Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s ...")
+        else:
+            # LIVE MODEL INFERENCE (YOLO11 + ByteTrack + 21 Zones)
+            max_secs = 30.0 if "First 30s" in inference_mode else None
 
-        try:
-            # Part A: Event Detection with real-time callback and elapsed timer
-            events = detect_events(str(target_resolved), progress_callback=update_progress)
-        except Exception as e:
-            st.error(f"Error during Part A Event Detection: {e}")
-            st.stop()
+            progress_bar = st.progress(0.0)
+            status_text = st.empty()
+            start_time = time.time()
 
-        # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
-        status_text.markdown("⚡ Initializing Causal Risk Estimator (Part B)...")
-        start_time_b = time.time()
+            def update_progress(current, total):
+                pct = int((current / total * 100)) if total > 0 else 0
+                progress_bar.progress(min((current / total) * 0.70, 0.70) if total > 0 else 0.0)
+                elapsed = time.time() - start_time
+                fps = (current / elapsed) if elapsed > 0 else 0.0
+                eta = ((total - current) / fps) if fps > 0 else 0.0
+                status_text.markdown(f"⏳ Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
 
-        cap = cv2.VideoCapture(str(target_resolved))
-        if not cap.isOpened():
-            st.error(f"Failed to open video file for Risk Estimator: `{target_video_path}`")
-            st.stop()
+            try:
+                # Part A: Event Detection with real-time callback and optional duration limit
+                events = detect_events(str(target_resolved), progress_callback=update_progress, max_seconds=max_secs)
+            except Exception as e:
+                st.error(f"Error during Part A Event Detection: {e}")
+                st.stop()
 
-        try:
-            fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 100)
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
+            # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
+            status_text.markdown("⚡ Initializing Causal Risk Estimator (Part B)...")
+            start_time_b = time.time()
 
-            estimator = RiskEstimator()
-            estimator.reset(meta={
-                "video_id": display_name,
-                "fps": fps,
-                "n_frames": total_frames,
-                "width": width,
-                "height": height,
-            })
+            cap = cv2.VideoCapture(str(target_resolved))
+            if not cap.isOpened():
+                st.error(f"Failed to open video file for Risk Estimator: `{target_video_path}`")
+                st.stop()
 
-            risk_scores = []
-            timestamps = []
-            frame_idx = 0
+            try:
+                fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 100)
+                if max_secs is not None and fps > 0:
+                    total_frames = min(total_frames, int(max_secs * fps))
 
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret or frame is None:
-                    break
-                if frame_idx % 5 == 0:
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
+
+                estimator = RiskEstimator()
+                estimator.reset(meta={
+                    "video_id": display_name,
+                    "fps": fps,
+                    "n_frames": total_frames,
+                    "width": width,
+                    "height": height,
+                })
+
+                risk_scores = []
+                timestamps = []
+                frame_idx = 0
+
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret or frame is None:
+                        break
                     t_sec = frame_idx / fps
-                    score = estimator.step(frame, t_sec)
-                    risk_scores.append(round(score, 4))
-                    timestamps.append(round(t_sec, 2))
+                    if max_secs is not None and t_sec > max_secs:
+                        break
 
-                    if total_frames > 0 and frame_idx % 15 == 0:
-                        pct_b = int((frame_idx / total_frames * 100))
-                        overall_pct = 0.70 + (min(frame_idx / total_frames, 1.0) * 0.30)
-                        progress_bar.progress(min(overall_pct, 1.0))
-                        elapsed_b = time.time() - start_time_b
-                        status_text.markdown(f"⏳ Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed Time: {elapsed_b:.1f}s ... (Risk Estimator)")
-                frame_idx += 1
-        except Exception as e:
-            st.error(f"Error during Part B Risk Estimation: {e}")
-            st.stop()
-        finally:
-            cap.release()
+                    if frame_idx % 5 == 0:
+                        score = estimator.step(frame, t_sec)
+                        risk_scores.append(round(score, 4))
+                        timestamps.append(round(t_sec, 2))
 
-        total_elapsed = time.time() - start_time
-        progress_bar.progress(1.0)
-        status_text.success(f"✅ Deep Learning Inference & Causal Risk Analysis Complete! Total Elapsed Time: {total_elapsed:.1f}s")
+                        if total_frames > 0 and frame_idx % 15 == 0:
+                            pct_b = int((frame_idx / total_frames * 100))
+                            overall_pct = 0.70 + (min(frame_idx / total_frames, 1.0) * 0.30)
+                            progress_bar.progress(min(overall_pct, 1.0))
+                            elapsed_b = time.time() - start_time_b
+                            fps_b = (frame_idx / elapsed_b) if elapsed_b > 0 else 0.0
+                            status_text.markdown(f"⏳ Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed Time: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
+                    frame_idx += 1
+            except Exception as e:
+                st.error(f"Error during Part B Risk Estimation: {e}")
+                st.stop()
+            finally:
+                cap.release()
 
-        # Cache results in session state
-        st.session_state["cached_video"] = target_video_path
-        st.session_state["cached_display_name"] = display_name
-        st.session_state["cached_events"] = events
-        st.session_state["cached_risk"] = risk_scores
-        st.session_state["cached_timestamps"] = timestamps
-        st.session_state["cached_elapsed"] = total_elapsed
+            total_elapsed = time.time() - start_time
+            progress_bar.progress(1.0)
+            status_text.success(f"✅ Deep Learning Inference & Causal Risk Analysis Complete! Total Elapsed Time: {total_elapsed:.1f}s")
+
+            # Cache results in session state
+            st.session_state["cached_video"] = target_video_path
+            st.session_state["cached_display_name"] = display_name
+            st.session_state["cached_events"] = events
+            st.session_state["cached_risk"] = risk_scores
+            st.session_state["cached_timestamps"] = timestamps
+            st.session_state["cached_elapsed"] = total_elapsed
 
     # Display results if present in session state
     if "cached_events" in st.session_state and st.session_state.get("cached_video") == target_video_path:
@@ -834,12 +1038,20 @@ elif selected_section == "Live Demo":
             filtered_df = df[df["Violation Label"].isin(filter_labels)]
 
             st.dataframe(filtered_df, use_container_width=True, height=280)
+
+            # Download Predictions Button
+            export_payload = json.dumps({"events": events, "risk": list(zip(timestamps, risk_scores))}, indent=2)
+            st.download_button(
+                label="📥 Export Predictions JSON (Hackathon Format)",
+                data=export_payload,
+                file_name=f"predictions_{Path(cached_name).stem}.json",
+                mime="application/json",
+            )
         else:
             st.info("No traffic violations or incidents detected in this stream.")
 
         st.markdown("### 📈 Causal Accident Risk Curve with 0.50 Alarm Threshold (Part B)")
         if risk_scores:
-            # Build dataframe with Risk Score and 0.5 Alarm Threshold line
             df_risk = pd.DataFrame({
                 "Accident Risk P(t)": risk_scores,
                 "Alarm Threshold (0.50)": [0.50] * len(risk_scores),

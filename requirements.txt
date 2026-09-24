@@ -4,3 +4,4 @@ numpy
 pandas
 opencv-python-headless
 streamlit
+imageio-ffmpeg
