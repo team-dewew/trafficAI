@@ -179,6 +179,59 @@ def shift_scene_config(
     return shifted
 
 
+def get_template_offset(
+    first_frame: np.ndarray,
+    ref_path: Path | str | None = None,
+) -> tuple[int, int]:
+    """Compute translation offset (dx, dy) using Template Matching on a static anchor."""
+    dx, dy = 0, 0
+    original_x, original_y = 2200, 700
+    anchor_w, anchor_h = 200, 200
+
+    if ref_path is None:
+        p = Path("reference.jpg") if Path("reference.jpg").exists() else Path("reference.png")
+    else:
+        p = Path(ref_path)
+
+    if p.exists():
+        ref_gray = cv2.imread(str(p), cv2.IMREAD_GRAYSCALE)
+        if ref_gray is not None:
+            first_frame_gray = (
+                cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
+                if len(first_frame.shape) == 3
+                else first_frame
+            )
+
+            # Crop static anchor from reference
+            anchor_gray = ref_gray[original_y : original_y + anchor_h, original_x : original_x + anchor_w]
+
+            # Match within localized search region around anchor (+/- 250px) to prevent false matches
+            h_f, w_f = first_frame_gray.shape[:2]
+            sy1 = max(0, original_y - 250)
+            sy2 = min(h_f, original_y + anchor_h + 250)
+            sx1 = max(0, original_x - 300)
+            sx2 = min(w_f, original_x + anchor_w + 300)
+            search_roi = first_frame_gray[sy1:sy2, sx1:sx2]
+
+            res = cv2.matchTemplate(search_roi, anchor_gray, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+            if max_val >= 0.35:
+                new_x = sx1 + max_loc[0]
+                new_y = sy1 + max_loc[1]
+                dx = int(new_x - original_x)
+                dy = int(new_y - original_y)
+            else:
+                # Fallback to full frame match with plausibility check
+                res_full = cv2.matchTemplate(first_frame_gray, anchor_gray, cv2.TM_CCOEFF_NORMED)
+                _, max_val_f, _, max_loc_f = cv2.minMaxLoc(res_full)
+                if max_val_f >= 0.5 and abs(max_loc_f[0] - original_x) < 350 and abs(max_loc_f[1] - original_y) < 300:
+                    dx = int(max_loc_f[0] - original_x)
+                    dy = int(max_loc_f[1] - original_y)
+
+    return dx, dy
+
+
 def get_direction(
     history: list[tuple[float, float, float]], dt: float = 1.0
 ) -> tuple[float, float]:
@@ -289,47 +342,7 @@ def detect_events(video_path: str) -> list[list]:
         return []
 
     # 2. Template Matching Auto-Alignment (Translation-only dx, dy)
-    # Uses a static anchor (top-right traffic light region: y:700-900, x:2200-2400)
-    dx, dy = 0, 0
-    original_x, original_y = 2200, 700
-    anchor_w, anchor_h = 200, 200
-
-    ref_path = Path("reference.jpg") if Path("reference.jpg").exists() else Path("reference.png")
-    if ref_path.exists():
-        ref_gray = cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE)
-        if ref_gray is not None:
-            first_frame_gray = (
-                cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
-                if len(first_frame.shape) == 3
-                else first_frame
-            )
-
-            # Crop static anchor from reference
-            anchor_gray = ref_gray[original_y : original_y + anchor_h, original_x : original_x + anchor_w]
-
-            # Match within localized search region around anchor (+/- 250px) to prevent false matches
-            h_f, w_f = first_frame_gray.shape[:2]
-            sy1 = max(0, original_y - 250)
-            sy2 = min(h_f, original_y + anchor_h + 250)
-            sx1 = max(0, original_x - 300)
-            sx2 = min(w_f, original_x + anchor_w + 300)
-            search_roi = first_frame_gray[sy1:sy2, sx1:sx2]
-
-            res = cv2.matchTemplate(search_roi, anchor_gray, cv2.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-
-            if max_val >= 0.35:
-                new_x = sx1 + max_loc[0]
-                new_y = sy1 + max_loc[1]
-                dx = int(new_x - original_x)
-                dy = int(new_y - original_y)
-            else:
-                # Fallback to full frame match with plausibility check
-                res_full = cv2.matchTemplate(first_frame_gray, anchor_gray, cv2.TM_CCOEFF_NORMED)
-                _, max_val_f, _, max_loc_f = cv2.minMaxLoc(res_full)
-                if max_val_f >= 0.5 and abs(max_loc_f[0] - original_x) < 350 and abs(max_loc_f[1] - original_y) < 300:
-                    dx = int(max_loc_f[0] - original_x)
-                    dy = int(max_loc_f[1] - original_y)
+    dx, dy = get_template_offset(first_frame)
 
     # Reset video capture back to frame 0
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
