@@ -138,120 +138,32 @@ def get_traffic_light_state(
     return "RED" if red_pixel_count > red_threshold else "GREEN"
 
 
-def align_scene_config(
-    video_frame: np.ndarray,
-    reference_image_path: str = "reference.jpg",
-    config_dict: dict | None = None,
+def shift_scene_config(
+    config: dict[str, list[np.ndarray] | np.ndarray | tuple[int, int, int, int]],
+    dx: int = 0,
+    dy: int = 0,
 ) -> dict:
-    """Auto-align the 21-zone coordinates using OpenCV Homography (Image Registration).
+    """Shift all coordinates in SCENE_CONFIG by (dx, dy) pixels."""
+    if dx == 0 and dy == 0:
+        return copy.deepcopy(config)
 
-    Matches ORB features between the reference image and the first video frame to compute
-    a 3x3 homography transformation matrix M, then transforms all lines, polygon zones,
-    and traffic light bounding boxes.
-    """
-    if config_dict is None:
-        config_dict = SCENE_CONFIG
-
-    # 1. Resolve reference image path (checks reference.jpg and reference.png)
-    ref_file = Path(reference_image_path)
-    if not ref_file.exists():
-        alt_file = ref_file.with_suffix(".png" if ref_file.suffix.lower() in (".jpg", ".jpeg") else ".jpg")
-        if alt_file.exists():
-            ref_file = alt_file
-
-    if not ref_file.exists():
-        print(f"[align_scene_config] Warning: Reference image '{reference_image_path}' not found. Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    # 2. Load reference image in grayscale
-    ref_gray = cv2.imread(str(ref_file), cv2.IMREAD_GRAYSCALE)
-    if ref_gray is None:
-        print(f"[align_scene_config] Warning: Could not read reference image '{ref_file}'. Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    # 3. Convert video_frame to grayscale
-    if video_frame is None or video_frame.size == 0:
-        print("[align_scene_config] Warning: Empty video frame provided. Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    if len(video_frame.shape) == 3:
-        vid_gray = cv2.cvtColor(video_frame, cv2.COLOR_BGR2GRAY)
-    else:
-        vid_gray = video_frame
-
-    # 4. Detect keypoints and compute descriptors with ORB(5000)
-    orb = cv2.ORB_create(5000)
-    kp_ref, des_ref = orb.detectAndCompute(ref_gray, None)
-    kp_vid, des_vid = orb.detectAndCompute(vid_gray, None)
-
-    if des_ref is None or des_vid is None or len(kp_ref) < 4 or len(kp_vid) < 4:
-        print("[align_scene_config] Warning: Insufficient descriptors found. Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    # 5. Match descriptors using BFMatcher(NORM_HAMMING, crossCheck=True)
-    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = matcher.match(des_ref, des_vid)
-    matches = sorted(matches, key=lambda x: x.distance)
-    top_matches = matches[:200]
-
-    if len(top_matches) < 15:
-        print(f"[align_scene_config] Warning: Insufficient matches ({len(top_matches)} < 15). Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    # 6. Extract source points (from reference) and destination points (from video frame)
-    src_pts = np.float32([kp_ref[m.queryIdx].pt for m in top_matches]).reshape(-1, 1, 2)
-    dst_pts = np.float32([kp_vid[m.trainIdx].pt for m in top_matches]).reshape(-1, 1, 2)
-
-    # 7. Find Homography using RANSAC
-    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-
-    if M is None or not np.all(np.isfinite(M)):
-        print("[align_scene_config] Warning: Homography computation failed (M is None or invalid). Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    inliers = int(np.sum(mask)) if mask is not None else 0
-    det = float(np.linalg.det(M))
-    # Validate homography: must have sufficient inliers and plausible camera perspective geometry
-    if inliers < 15 or det < 0.5 or det > 2.0 or M[0, 0] <= 0 or M[1, 1] <= 0:
-        print(f"[align_scene_config] Warning: Degenerate homography (inliers={inliers}, det={det:.3f}). Returning original config.")
-        return copy.deepcopy(config_dict)
-
-    # 8. Transform coordinates in deepcopy of config_dict
-    def _transform_points(pts: np.ndarray, M_mat: np.ndarray) -> np.ndarray:
-        reshaped = pts.astype(np.float32).reshape(-1, 1, 2)
-        transformed = cv2.perspectiveTransform(reshaped, M_mat)
-        return transformed.reshape(-1, 2).round().astype(np.int32)
-
-    def _transform_bbox(bbox: tuple[int, int, int, int], M_mat: np.ndarray) -> tuple[int, int, int, int]:
-        x1, y1, x2, y2 = bbox
-        pts = np.array([[[x1, y1]], [[x2, y2]]], dtype=np.float32)
-        transformed = cv2.perspectiveTransform(pts, M_mat)
-        tx1, ty1 = transformed[0, 0]
-        tx2, ty2 = transformed[1, 0]
-        nx1 = int(round(min(tx1, tx2)))
-        ny1 = int(round(min(ty1, ty2)))
-        nx2 = int(round(max(tx1, tx2)))
-        ny2 = int(round(max(ty1, ty2)))
-        return (nx1, ny1, nx2, ny2)
-
-    aligned_config = copy.deepcopy(config_dict)
-    for key, val in aligned_config.items():
+    offset = np.array([dx, dy], dtype=np.int32)
+    shifted: dict = copy.deepcopy(config)
+    for key, val in shifted.items():
         if isinstance(val, np.ndarray):
-            aligned_config[key] = _transform_points(val, M)
+            shifted[key] = val + offset
         elif isinstance(val, list):
-            aligned_config[key] = [
-                _transform_points(item, M) if isinstance(item, np.ndarray) else copy.deepcopy(item)
+            shifted[key] = [
+                (item + offset) if isinstance(item, np.ndarray) else copy.deepcopy(item)
                 for item in val
             ]
         elif key in ("traffic_light_main_bbox", "traffic_light_ped_bbox", "ped_bbox") or (
             isinstance(val, tuple) and len(val) == 4
         ):
-            aligned_config[key] = _transform_bbox(val, M)
+            x1, y1, x2, y2 = val
+            shifted[key] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
 
-    if "traffic_light_ped_bbox" in aligned_config and "ped_bbox" not in aligned_config:
-        aligned_config["ped_bbox"] = aligned_config["traffic_light_ped_bbox"]
-
-    return aligned_config
+    return shifted
 
 
 def get_direction(
@@ -331,82 +243,88 @@ def detect_events(video_path: str) -> list[list]:
         A list of events, each [start_sec, end_sec, label] with
         0 <= start_sec < end_sec <= duration and label in CLASSES.
     """
-    # 1. Initialize YOLO detector
+    # 1. Manual Video Offset Handler (for slight shifts in fixed camera perspective)
+    vid_name = Path(video_path).name
+    dx, dy = 0, 0
+    # User can manually input the offset they find from visualizer later
+    if "sample_2" in vid_name:
+        dx, dy = 10, -15
+    elif "C3896" in vid_name:
+        dx, dy = 0, 0
+    elif "C3897" in vid_name:
+        dx, dy = 0, 0
+    elif "C3902" in vid_name:
+        dx, dy = 0, 0
+    elif "C3905" in vid_name:
+        dx, dy = 0, 0
+
+    # Shift all SCENE_CONFIG polygons by [dx, dy] cleanly here
+    cfg = shift_scene_config(SCENE_CONFIG, dx, dy)
+
+    # 2. External Kaggle Anomaly Model Interface
+    # Target complex classes: accident, near_miss, fire_smoke
+    # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
+    # anomaly_model = ...
+    anomaly_model = None
+
+    # 3. Initialize YOLO detector
     local_weights = Path("weights/yolov8s.pt")
     model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
     model = YOLO(model_path)
 
-    # 2. Open video stream and read the first frame for automatic scene alignment
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return []
-
-    ret, first_frame = cap.read()
-    if not ret or first_frame is None:
-        cap.release()
-        return []
-
-    # Auto-align 21-zone coordinates via OpenCV Homography
-    ALIGNED_CONFIG = align_scene_config(
-        video_frame=first_frame,
-        reference_image_path="reference.jpg",
-        config_dict=SCENE_CONFIG,
-    )
-
-    # Reset video capture back to frame 0
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
-        cap.release()
-        cap = cv2.VideoCapture(video_path)
-
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
-
-    # 3. Initialize Line Zones using ALIGNED_CONFIG
-    stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
+    # 4. Initialize Line Zones
+    stop_red_pts = cfg["stop_line_red"]
     stop_line_red = sv.LineZone(
         start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
         end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
 
-    stop_jam_pts = ALIGNED_CONFIG["stop_line_jam"]
+    stop_jam_pts = cfg["stop_line_jam"]
     stop_line_jam = sv.LineZone(
         start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
         end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
 
-    yield_pts = ALIGNED_CONFIG["yield_ped_line"]
+    yield_pts = cfg["yield_ped_line"]
     yield_ped_line = sv.LineZone(
         start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
         end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
     )
 
-    # 4. Initialize Grouped Polygon Zones using ALIGNED_CONFIG
-    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["crosswalks"]]
-    island_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["forbidden_islands"]]
-    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["sidewalks"]]
+    # 5. Initialize Grouped Polygon Zones
+    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in cfg["crosswalks"]]
+    island_zones = [sv.PolygonZone(polygon=p) for p in cfg["forbidden_islands"]]
+    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in cfg["sidewalks"]]
 
     road_polygons = [
-        ALIGNED_CONFIG["lane_ltr"],
-        ALIGNED_CONFIG["lane_rtl"],
-        ALIGNED_CONFIG["intersection_core"],
-        ALIGNED_CONFIG["right_turn_zone"],
-        ALIGNED_CONFIG["lower_core"],
+        cfg["lane_ltr"],
+        cfg["lane_rtl"],
+        cfg["intersection_core"],
+        cfg["right_turn_zone"],
+        cfg["lower_core"],
     ]
     road_zones = [sv.PolygonZone(polygon=p) for p in road_polygons]
 
-    lane_ltr_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_ltr"])
-    lane_rtl_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_rtl"])
-    intersection_core_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["intersection_core"])
+    lane_ltr_zone = sv.PolygonZone(polygon=cfg["lane_ltr"])
+    lane_rtl_zone = sv.PolygonZone(polygon=cfg["lane_rtl"])
+    intersection_core_zone = sv.PolygonZone(polygon=cfg["intersection_core"])
 
-    # 5. Initialize Multi-Object Tracker (ByteTrack)
+    # 6. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
+
+    # 7. Open video stream
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return []
+
+    fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
 
     frame_idx = 0
     events: list[list] = []
 
-    # 6. State tracking structures
+    # 8. State tracking structures
     track_history: dict[int, list[tuple[float, float, float]]] = {}
     last_seen_time: dict[int, float] = {}
 
@@ -418,7 +336,7 @@ def detect_events(video_path: str) -> list[list]:
     crossed_red_line_map: dict[int, bool] = {}
     crossed_jam_line_map: dict[int, bool] = {}
 
-    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
+    tl_main_bbox = cfg["traffic_light_main_bbox"]
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -435,6 +353,13 @@ def detect_events(video_path: str) -> list[list]:
         detections = sv.Detections.from_ultralytics(results)
         tracked_detections = tracker.update_with_detections(detections)
         num_dets = len(tracked_detections)
+
+        # Placeholder: Run Kaggle anomaly model (accident, near_miss, fire_smoke)
+        if anomaly_model is not None:
+            # anomaly_preds = anomaly_model.predict(frame, t_sec)
+            # for pred in anomaly_preds:
+            #     events.append([pred["start_sec"], pred["end_sec"], pred["label"]])
+            pass
 
         # c) Evaluate all zones on tracked detections using vectorized triggers
         in_any_road = np.zeros(num_dets, dtype=bool)
