@@ -278,80 +278,119 @@ def detect_events(video_path: str) -> list[list]:
         A list of events, each [start_sec, end_sec, label] with
         0 <= start_sec < end_sec <= duration and label in CLASSES.
     """
-    # 1. Manual Video Offset Handler (for slight shifts in fixed camera perspective)
-    vid_name = Path(video_path).name
+    # 1. Open video stream and read first frame for template matching alignment
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return []
+
+    ret, first_frame = cap.read()
+    if not ret or first_frame is None:
+        cap.release()
+        return []
+
+    # 2. Template Matching Auto-Alignment (Translation-only dx, dy)
+    # Uses a static anchor (top-right traffic light region: y:700-900, x:2200-2400)
     dx, dy = 0, 0
-    # User can manually input the offset they find from visualizer later
-    if "sample_2" in vid_name:
-        dx, dy = 10, -15
-    elif "C3896" in vid_name:
-        dx, dy = 0, 0
-    elif "C3897" in vid_name:
-        dx, dy = 0, 0
-    elif "C3902" in vid_name:
-        dx, dy = 0, 0
-    elif "C3905" in vid_name:
-        dx, dy = 0, 0
+    original_x, original_y = 2200, 700
+    anchor_w, anchor_h = 200, 200
 
-    # Shift all SCENE_CONFIG polygons by [dx, dy] cleanly here
-    cfg = shift_scene_config(SCENE_CONFIG, dx, dy)
+    ref_path = Path("reference.jpg") if Path("reference.jpg").exists() else Path("reference.png")
+    if ref_path.exists():
+        ref_gray = cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE)
+        if ref_gray is not None:
+            first_frame_gray = (
+                cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
+                if len(first_frame.shape) == 3
+                else first_frame
+            )
 
-    # 2. External Kaggle Anomaly Model Interface
+            # Crop static anchor from reference
+            anchor_gray = ref_gray[original_y : original_y + anchor_h, original_x : original_x + anchor_w]
+
+            # Match within localized search region around anchor (+/- 250px) to prevent false matches
+            h_f, w_f = first_frame_gray.shape[:2]
+            sy1 = max(0, original_y - 250)
+            sy2 = min(h_f, original_y + anchor_h + 250)
+            sx1 = max(0, original_x - 300)
+            sx2 = min(w_f, original_x + anchor_w + 300)
+            search_roi = first_frame_gray[sy1:sy2, sx1:sx2]
+
+            res = cv2.matchTemplate(search_roi, anchor_gray, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+            if max_val >= 0.35:
+                new_x = sx1 + max_loc[0]
+                new_y = sy1 + max_loc[1]
+                dx = int(new_x - original_x)
+                dy = int(new_y - original_y)
+            else:
+                # Fallback to full frame match with plausibility check
+                res_full = cv2.matchTemplate(first_frame_gray, anchor_gray, cv2.TM_CCOEFF_NORMED)
+                _, max_val_f, _, max_loc_f = cv2.minMaxLoc(res_full)
+                if max_val_f >= 0.5 and abs(max_loc_f[0] - original_x) < 350 and abs(max_loc_f[1] - original_y) < 300:
+                    dx = int(max_loc_f[0] - original_x)
+                    dy = int(max_loc_f[1] - original_y)
+
+    # Reset video capture back to frame 0
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
+        cap.release()
+        cap = cv2.VideoCapture(video_path)
+
+    # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
+    ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
+
+    # 3. External Kaggle Anomaly Model Interface
     # Target complex classes: accident, near_miss, fire_smoke
     # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
     # anomaly_model = ...
     anomaly_model = None
 
-    # 3. Initialize YOLO detector
+    # 4. Initialize YOLO detector
     local_weights = Path("weights/yolov8s.pt")
     model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
     model = YOLO(model_path)
 
-    # 4. Initialize Line Zones
-    stop_red_pts = cfg["stop_line_red"]
+    # 5. Initialize Line Zones using ALIGNED_CONFIG
+    stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
     stop_line_red = sv.LineZone(
         start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
         end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
 
-    stop_jam_pts = cfg["stop_line_jam"]
+    stop_jam_pts = ALIGNED_CONFIG["stop_line_jam"]
     stop_line_jam = sv.LineZone(
         start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
         end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
 
-    yield_pts = cfg["yield_ped_line"]
+    yield_pts = ALIGNED_CONFIG["yield_ped_line"]
     yield_ped_line = sv.LineZone(
         start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
         end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
     )
 
-    # 5. Initialize Grouped Polygon Zones
-    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in cfg["crosswalks"]]
-    island_zones = [sv.PolygonZone(polygon=p) for p in cfg["forbidden_islands"]]
-    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in cfg["sidewalks"]]
+    # 6. Initialize Grouped Polygon Zones using ALIGNED_CONFIG
+    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["crosswalks"]]
+    island_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["forbidden_islands"]]
+    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["sidewalks"]]
 
     road_polygons = [
-        cfg["lane_ltr"],
-        cfg["lane_rtl"],
-        cfg["intersection_core"],
-        cfg["right_turn_zone"],
-        cfg["lower_core"],
+        ALIGNED_CONFIG["lane_ltr"],
+        ALIGNED_CONFIG["lane_rtl"],
+        ALIGNED_CONFIG["intersection_core"],
+        ALIGNED_CONFIG["right_turn_zone"],
+        ALIGNED_CONFIG["lower_core"],
     ]
     road_zones = [sv.PolygonZone(polygon=p) for p in road_polygons]
 
-    lane_ltr_zone = sv.PolygonZone(polygon=cfg["lane_ltr"])
-    lane_rtl_zone = sv.PolygonZone(polygon=cfg["lane_rtl"])
-    intersection_core_zone = sv.PolygonZone(polygon=cfg["intersection_core"])
-    right_turn_zone = sv.PolygonZone(polygon=cfg["right_turn_zone"])
+    lane_ltr_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_ltr"])
+    lane_rtl_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_rtl"])
+    intersection_core_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["intersection_core"])
+    right_turn_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["right_turn_zone"])
 
-    # 6. Initialize Multi-Object Tracker (ByteTrack)
+    # 7. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
-
-    # 7. Open video stream
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return []
 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -375,7 +414,7 @@ def detect_events(video_path: str) -> list[list]:
     crossed_red_line_map: dict[int, bool] = {}
     crossed_jam_line_map: dict[int, bool] = {}
 
-    tl_main_bbox = cfg["traffic_light_main_bbox"]
+    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
 
     while cap.isOpened():
         ret, frame = cap.read()
