@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-visualizer.py — High-Precision 21-Zone Live Visualizer for Traffic AI Challenge.
+visualizer.py — AI Auto-Aligned 21-Zone Live Visualizer for Traffic AI Challenge.
 
 Features:
-- Pure static 21-zone layout built directly from SCENE_CONFIG (zero alignment drift).
+- Pure ML-based auto-alignment: dynamically detects the traffic light in the first frame
+  using YOLOv8 (COCO class 9) and calculates translation displacement (dx, dy).
+- Shifts all 21 supervision zones and lines using ALIGNED_CONFIG.
 - Processes frames natively in 4K resolution, downscaling to 1080p for smooth display.
 - Real-time YOLO detection & ByteTrack vehicle/pedestrian tracking.
 - Picture-in-Picture (PiP) Debug view in the top-right corner displaying:
-    1) High-resolution zoomed traffic light crop from SCENE_CONFIG["traffic_light_main_bbox"].
+    1) High-resolution zoomed traffic light crop from ALIGNED_CONFIG["traffic_light_main_bbox"].
     2) Binary HSV Red Mask with exact pixel counts and detection state.
 
 Controls:
@@ -29,6 +31,8 @@ from solution import (
     SCENE_CONFIG,
     COCO_ROAD_USERS,
     get_traffic_light_state,
+    get_ai_offset,
+    shift_scene_config,
 )
 
 
@@ -44,7 +48,7 @@ def find_default_video() -> str:
 
 
 def build_scene_zones(config: dict):
-    """Build all supervision zones and line counters directly in 4K coordinate space from SCENE_CONFIG."""
+    """Build all supervision zones and line counters directly in 4K coordinate space from config."""
     # 1. Stop Lines & Yield Line
     stop_red_pts = config["stop_line_red"]
     stop_line_red = sv.LineZone(
@@ -174,7 +178,7 @@ def build_scene_zones(config: dict):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Static 21-Zone Live Visualizer for Traffic AI Challenge"
+        description="AI Auto-Aligned Live Visualizer for Traffic AI Challenge"
     )
     parser.add_argument(
         "--video",
@@ -202,7 +206,7 @@ def main():
         sys.exit(1)
 
     print("\n========================================================")
-    print("      TRAFFIC AI — STATIC 21-ZONE LIVE VISUALIZER       ")
+    print("      TRAFFIC AI — AI AUTO-ALIGNED LIVE VISUALIZER      ")
     print("========================================================")
     print(f"[INFO] Video: {video_path.name}")
     print("[INFO] Controls:")
@@ -218,8 +222,25 @@ def main():
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
-    # 1. Traffic light bbox directly from static SCENE_CONFIG
-    tl_main_bbox = SCENE_CONFIG["traffic_light_main_bbox"]
+    # 1. AI-based Auto-Alignment on the first frame using YOLOv8
+    ret, first_frame = cap.read()
+    if not ret or first_frame is None:
+        print("[ERROR] Failed to read first frame from video.", file=sys.stderr)
+        cap.release()
+        sys.exit(1)
+
+    dx, dy = get_ai_offset(first_frame, model_path=args.model)
+    print(f"\033[1m[AI ALIGNMENT] Shifted by dx={dx:+d}, dy={dy:+d} using YOLO Traffic Light Detection\033[0m")
+
+    # Rewind video capture back to frame 0
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
+        cap.release()
+        cap = cv2.VideoCapture(str(video_path))
+
+    # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
+    ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
+    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
 
     # 2. Initialize YOLO Model & ByteTrack
     print(f"[INFO] Loading {args.model} for real-time tracking...")
@@ -230,10 +251,10 @@ def main():
     box_annotator = sv.BoxAnnotator(thickness=3)
     label_annotator = sv.LabelAnnotator(text_scale=0.8, text_thickness=2)
 
-    # 3. Build supervision zones directly in 4K coordinate space from static SCENE_CONFIG
-    zones = build_scene_zones(SCENE_CONFIG)
+    # 3. Build supervision zones directly in 4K coordinate space from ALIGNED_CONFIG
+    zones = build_scene_zones(ALIGNED_CONFIG)
 
-    window_name = "Traffic AI Visualizer"
+    window_name = "Traffic AI Auto-Aligned Visualizer"
     frame_idx = 0
     paused = False
     display_frame = None
@@ -253,10 +274,10 @@ def main():
 
             t_sec = frame_idx / fps
 
-            # a) Evaluate traffic light state on high-resolution 4K frame using SCENE_CONFIG
+            # a) Evaluate traffic light state on high-resolution 4K frame using ALIGNED_CONFIG
             tl_state = get_traffic_light_state(raw_frame, tl_main_bbox)
 
-            # PiP Debug: Extract crop from original 4K frame directly using SCENE_CONFIG
+            # PiP Debug: Extract crop from original 4K frame directly using ALIGNED_CONFIG
             x1, y1, x2, y2 = tl_main_bbox
             raw_h, raw_w = raw_frame.shape[:2]
             csx1, csx2 = max(0, min(x1, raw_w)), max(0, min(x2, raw_w))
@@ -360,7 +381,7 @@ def main():
 
             cv2.putText(
                 display_frame,
-                "TRAFFIC AI — 21-ZONE MONITOR",
+                f"AI ALIGNMENT: dx={dx:+d}, dy={dy:+d}",
                 (35, 55),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.8,
@@ -370,21 +391,21 @@ def main():
             )
             cv2.putText(
                 display_frame,
-                f"Time: {t_sec:.1f}s | Frame: {frame_idx}/{total_frames} | {'PAUSED' if paused else 'LIVE'}",
+                "Method: YOLOv8 Traffic Light (COCO Class 9)",
                 (35, 88),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (220, 220, 220),
+                0.52,
+                (200, 255, 200),
                 1,
                 cv2.LINE_AA,
             )
             cv2.putText(
                 display_frame,
-                f"Active Tracks: {len(tracked_detections)} | Light: {tl_state}",
+                f"Time: {t_sec:.1f}s | Frame: {frame_idx}/{total_frames} | Tracks: {len(tracked_detections)}",
                 (35, 120),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (0, 255, 128),
+                0.52,
+                (255, 255, 255),
                 1,
                 cv2.LINE_AA,
             )

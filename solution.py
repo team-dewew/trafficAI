@@ -151,6 +151,86 @@ def get_traffic_light_state(
     return "RED" if red_pixel_count > red_threshold else "GREEN"
 
 
+def shift_scene_config(
+    config: dict[str, list[np.ndarray] | np.ndarray | tuple[int, int, int, int]],
+    dx: int = 0,
+    dy: int = 0,
+) -> dict:
+    """Shift all coordinates in SCENE_CONFIG by (dx, dy) pixels."""
+    if dx == 0 and dy == 0:
+        return copy.deepcopy(config)
+
+    offset = np.array([dx, dy], dtype=np.int32)
+    shifted: dict = copy.deepcopy(config)
+    for key, val in shifted.items():
+        if isinstance(val, np.ndarray):
+            shifted[key] = val + offset
+        elif isinstance(val, list):
+            shifted[key] = [
+                (item + offset) if isinstance(item, np.ndarray) else copy.deepcopy(item)
+                for item in val
+            ]
+        elif key in ("traffic_light_main_bbox", "traffic_light_ped_bbox", "ped_bbox") or (
+            isinstance(val, tuple) and len(val) == 4
+        ):
+            x1, y1, x2, y2 = val
+            shifted[key] = (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+
+    return shifted
+
+
+def get_ai_offset(
+    first_frame: np.ndarray,
+    model_path: str = "yolov8n.pt",
+) -> tuple[int, int]:
+    """Dynamically detect traffic light in first frame using YOLOv8 (COCO class 9)
+    and calculate its offset (dx, dy) from reference center (2325, 790).
+    """
+    ref_center = (2325, 790)
+    dx, dy = 0, 0
+
+    try:
+        model = YOLO(model_path)
+        # Run inference focusing ONLY on class 9 (traffic light in COCO)
+        results = model(
+            first_frame,
+            classes=[9],
+            conf=0.10,
+            imgsz=1280,
+            verbose=False,
+        )[0]
+        boxes = results.boxes.xyxy.cpu().numpy()
+
+        # If not detected on full frame, try local search crop around expected position
+        if len(boxes) == 0:
+            h, w = first_frame.shape[:2]
+            crop_y1, crop_y2 = max(0, 500), min(h, 1100)
+            crop_x1, crop_x2 = max(0, 1800), min(w, 2800)
+            crop = first_frame[crop_y1:crop_y2, crop_x1:crop_x2]
+            crop_res = model(crop, classes=[9], conf=0.05, verbose=False)[0]
+            crop_boxes = crop_res.boxes.xyxy.cpu().numpy()
+            if len(crop_boxes) > 0:
+                boxes = np.array([
+                    [b[0] + crop_x1, b[1] + crop_y1, b[2] + crop_x1, b[3] + crop_y1]
+                    for b in crop_boxes
+                ])
+
+        if len(boxes) > 0:
+            best_dist = float("inf")
+            for b in boxes:
+                cx = (b[0] + b[2]) / 2.0
+                cy = (b[1] + b[3]) / 2.0
+                dist = np.hypot(cx - ref_center[0], cy - ref_center[1])
+                if dist < 400 and dist < best_dist:
+                    best_dist = dist
+                    dx = int(round(cx - ref_center[0]))
+                    dy = int(round(cy - ref_center[1]))
+    except Exception as e:
+        dx, dy = 0, 0
+
+    return dx, dy
+
+
 def get_direction(
     history: list[tuple[float, float, float]], dt: float = 1.0
 ) -> tuple[float, float]:
@@ -250,59 +330,77 @@ def detect_events(video_path: str) -> list[list]:
         A list of events, each [start_sec, end_sec, label] with
         0 <= start_sec < end_sec <= duration and label in CLASSES.
     """
-    # 1. Open video stream
+    # 1. Open video stream and read first frame for AI auto-alignment
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return []
 
-    # 2. External Kaggle Anomaly Model Interface
+    ret, first_frame = cap.read()
+    if not ret or first_frame is None:
+        cap.release()
+        return []
+
+    # 2. AI Auto-Alignment: detect traffic light displacement using YOLO
+    dx, dy = get_ai_offset(first_frame)
+    print(f"[AI ALIGNMENT] Shifted by dx={dx:+d}, dy={dy:+d} using YOLO Traffic Light Detection")
+
+    # Rewind video capture back to frame 0
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    if cap.get(cv2.CAP_PROP_POS_FRAMES) != 0:
+        cap.release()
+        cap = cv2.VideoCapture(video_path)
+
+    # Shift all 21 zones and bounding boxes by [dx, dy] cleanly
+    ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
+
+    # 3. External Kaggle Anomaly Model Interface
     # Target complex classes: accident, near_miss, fire_smoke
     # TODO: Load Kaggle Anomaly Model (e.g. trained on DoTA/CCD dataset)
     # anomaly_model = ...
     anomaly_model = None
 
-    # 3. Initialize YOLO detector
+    # 4. Initialize YOLO detector
     local_weights = Path("weights/yolov8s.pt")
     model_path = str(local_weights) if local_weights.exists() else "yolov8s.pt"
     model = YOLO(model_path)
 
-    # 4. Initialize Line Zones directly using static SCENE_CONFIG
-    stop_red_pts = SCENE_CONFIG["stop_line_red"]
+    # 5. Initialize Line Zones directly using ALIGNED_CONFIG
+    stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
     stop_line_red = sv.LineZone(
         start=sv.Point(int(stop_red_pts[0][0]), int(stop_red_pts[0][1])),
         end=sv.Point(int(stop_red_pts[1][0]), int(stop_red_pts[1][1])),
     )
 
-    stop_jam_pts = SCENE_CONFIG["stop_line_jam"]
+    stop_jam_pts = ALIGNED_CONFIG["stop_line_jam"]
     stop_line_jam = sv.LineZone(
         start=sv.Point(int(stop_jam_pts[0][0]), int(stop_jam_pts[0][1])),
         end=sv.Point(int(stop_jam_pts[1][0]), int(stop_jam_pts[1][1])),
     )
 
-    yield_pts = SCENE_CONFIG["yield_ped_line"]
+    yield_pts = ALIGNED_CONFIG["yield_ped_line"]
     yield_ped_line = sv.LineZone(
         start=sv.Point(int(yield_pts[0][0]), int(yield_pts[0][1])),
         end=sv.Point(int(yield_pts[1][0]), int(yield_pts[1][1])),
     )
 
-    # 5. Initialize Grouped Polygon Zones directly using static SCENE_CONFIG
-    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["crosswalks"]]
-    island_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["forbidden_islands"]]
-    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in SCENE_CONFIG["sidewalks"]]
+    # 6. Initialize Grouped Polygon Zones directly using ALIGNED_CONFIG
+    crosswalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["crosswalks"]]
+    island_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["forbidden_islands"]]
+    sidewalk_zones = [sv.PolygonZone(polygon=p) for p in ALIGNED_CONFIG["sidewalks"]]
 
     road_polygons = [
-        SCENE_CONFIG["lane_ltr"],
-        SCENE_CONFIG["lane_rtl"],
-        SCENE_CONFIG["intersection_core"],
-        SCENE_CONFIG["right_turn_zone"],
-        SCENE_CONFIG["lower_core"],
+        ALIGNED_CONFIG["lane_ltr"],
+        ALIGNED_CONFIG["lane_rtl"],
+        ALIGNED_CONFIG["intersection_core"],
+        ALIGNED_CONFIG["right_turn_zone"],
+        ALIGNED_CONFIG["lower_core"],
     ]
     road_zones = [sv.PolygonZone(polygon=p) for p in road_polygons]
 
-    lane_ltr_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_ltr"])
-    lane_rtl_zone = sv.PolygonZone(polygon=SCENE_CONFIG["lane_rtl"])
-    intersection_core_zone = sv.PolygonZone(polygon=SCENE_CONFIG["intersection_core"])
-    right_turn_zone = sv.PolygonZone(polygon=SCENE_CONFIG["right_turn_zone"])
+    lane_ltr_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_ltr"])
+    lane_rtl_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["lane_rtl"])
+    intersection_core_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["intersection_core"])
+    right_turn_zone = sv.PolygonZone(polygon=ALIGNED_CONFIG["right_turn_zone"])
 
     # 6. Initialize Multi-Object Tracker (ByteTrack)
     tracker = sv.ByteTrack()
@@ -329,7 +427,7 @@ def detect_events(video_path: str) -> list[list]:
     crossed_red_line_map: dict[int, bool] = {}
     crossed_jam_line_map: dict[int, bool] = {}
 
-    tl_main_bbox = SCENE_CONFIG["traffic_light_main_bbox"]
+    tl_main_bbox = ALIGNED_CONFIG["traffic_light_main_bbox"]
 
     while cap.isOpened():
         ret, frame = cap.read()
