@@ -445,7 +445,6 @@ def detect_events(video_path: str) -> list[list]:
             verbose=False,
             classes=list(TARGET_COCO_CLASSES.keys()),
             imgsz=640,
-            half=True,
         )[0]
         detections = sv.Detections.from_ultralytics(results)
         tracked_detections = tracker.update_with_detections(detections)
