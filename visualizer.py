@@ -268,6 +268,16 @@ def main():
 
             t_sec = frame_idx / fps
 
+            # a) Evaluate traffic light state on high-resolution 4K frame BEFORE resizing
+            orig_tl = SCENE_CONFIG["traffic_light_main_bbox"]
+            tl_4k_bbox = (
+                orig_tl[0] + X_OFFSET,
+                orig_tl[1] + Y_OFFSET,
+                orig_tl[2] + X_OFFSET,
+                orig_tl[3] + Y_OFFSET,
+            )
+            tl_state = get_traffic_light_state(raw_frame, tl_4k_bbox)
+
             # Immediately downscale 4K frame to 1080p for smooth FPS
             frame = cv2.resize(raw_frame, (0, 0), fx=SCALE, fy=SCALE)
 
@@ -275,9 +285,6 @@ def main():
             if (X_OFFSET, Y_OFFSET) != last_offset:
                 zones = build_zones_and_annotators(X_OFFSET, Y_OFFSET, SCALE)
                 last_offset = (X_OFFSET, Y_OFFSET)
-
-            # a) Traffic light state on shifted bbox
-            tl_state = get_traffic_light_state(frame, zones["tl_bbox"])
 
             # b) YOLO Detection & Tracking
             results = model(

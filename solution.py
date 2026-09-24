@@ -117,7 +117,7 @@ OBSTACLE_CLASSES = set(COCO_OBSTACLES.values())
 def get_traffic_light_state(
     frame: np.ndarray,
     bbox: tuple[int, int, int, int],
-    red_threshold: int = 25,
+    red_threshold: int = 5,
 ) -> str:
     """Determine traffic light state (RED or GREEN) inside the specified bbox using HSV color masking."""
     x1, y1, x2, y2 = bbox
@@ -137,10 +137,10 @@ def get_traffic_light_state(
     # Convert to HSV color space
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
 
-    # In HSV, red hue wraps around 0 and 180
-    lower_red1 = np.array([0, 70, 70], dtype=np.uint8)
+    # In HSV, red hue wraps around 0 and 180 (broadened bounds to capture washed out/overexposed red LEDs)
+    lower_red1 = np.array([0, 40, 40], dtype=np.uint8)
     upper_red1 = np.array([10, 255, 255], dtype=np.uint8)
-    lower_red2 = np.array([170, 70, 70], dtype=np.uint8)
+    lower_red2 = np.array([160, 40, 40], dtype=np.uint8)
     upper_red2 = np.array([180, 255, 255], dtype=np.uint8)
 
     mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
