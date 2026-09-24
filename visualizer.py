@@ -278,6 +278,31 @@ def main():
             )
             tl_state = get_traffic_light_state(raw_frame, tl_4k_bbox)
 
+            # PiP Debug: Extract crop from original 4K frame and compute HSV red mask
+            x1, y1, x2, y2 = SCENE_CONFIG["traffic_light_main_bbox"]
+            sx1, sy1 = x1 + X_OFFSET, y1 + Y_OFFSET
+            sx2, sy2 = x2 + X_OFFSET, y2 + Y_OFFSET
+            raw_h, raw_w = raw_frame.shape[:2]
+            csx1, csx2 = max(0, min(sx1, raw_w)), max(0, min(sx2, raw_w))
+            csy1, csy2 = max(0, min(sy1, raw_h)), max(0, min(sy2, raw_h))
+
+            if csx2 > csx1 and csy2 > csy1:
+                tl_crop = raw_frame[csy1:csy2, csx1:csx2]
+                tl_hsv = cv2.cvtColor(tl_crop, cv2.COLOR_BGR2HSV)
+                lower_red1 = np.array([0, 40, 40], dtype=np.uint8)
+                upper_red1 = np.array([10, 255, 255], dtype=np.uint8)
+                lower_red2 = np.array([160, 40, 40], dtype=np.uint8)
+                upper_red2 = np.array([180, 255, 255], dtype=np.uint8)
+
+                m1 = cv2.inRange(tl_hsv, lower_red1, upper_red1)
+                m2 = cv2.inRange(tl_hsv, lower_red2, upper_red2)
+                tl_red_mask = m1 | m2
+                tl_red_pixel_count = cv2.countNonZero(tl_red_mask)
+            else:
+                tl_crop = np.zeros((250, 100, 3), dtype=np.uint8)
+                tl_red_mask = np.zeros((250, 100), dtype=np.uint8)
+                tl_red_pixel_count = 0
+
             # Immediately downscale 4K frame to 1080p for smooth FPS
             frame = cv2.resize(raw_frame, (0, 0), fx=SCALE, fy=SCALE)
 
@@ -389,6 +414,98 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.52,
                 (0, 220, 100),
+                1,
+                cv2.LINE_AA,
+            )
+
+            # g) Top-Right Picture-in-Picture (PiP) Traffic Light Debug View
+            pip_w, pip_h = 100, 250
+            pip_crop = cv2.resize(tl_crop, (pip_w, pip_h))
+            pip_mask = cv2.resize(tl_red_mask, (pip_w, pip_h))
+            pip_mask_bgr = cv2.cvtColor(pip_mask, cv2.COLOR_GRAY2BGR)
+
+            fw = frame.shape[1]
+            panel_w, panel_h = 245, 365
+            panel_x1 = fw - panel_w - 20
+            panel_y1 = 20
+            panel_x2 = panel_x1 + panel_w
+            panel_y2 = panel_y1 + panel_h
+
+            # Translucent dark HUD card
+            pip_overlay = frame.copy()
+            cv2.rectangle(pip_overlay, (panel_x1, panel_y1), (panel_x2, panel_y2), (15, 15, 15), -1)
+            cv2.addWeighted(pip_overlay, 0.85, frame, 0.15, 0, frame)
+            status_color = (0, 0, 255) if tl_state == "RED" else (0, 255, 0)
+            cv2.rectangle(frame, (panel_x1, panel_y1), (panel_x2, panel_y2), status_color, 2)
+
+            # Panel Title
+            cv2.putText(
+                frame,
+                "TRAFFIC LIGHT DEBUG",
+                (panel_x1 + 18, panel_y1 + 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+            # Image positions
+            crop_x1 = panel_x1 + 15
+            crop_x2 = crop_x1 + pip_w
+            mask_x1 = crop_x2 + 15
+            mask_x2 = mask_x1 + pip_w
+            img_y1 = panel_y1 + 55
+            img_y2 = img_y1 + pip_h
+
+            # Text labels above images
+            cv2.putText(
+                frame,
+                "AI CROP",
+                (crop_x1 + 15, img_y1 - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (0, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                frame,
+                "RED MASK",
+                (mask_x1 + 8, img_y1 - 8),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (0, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+            # Embed resized crop and mask
+            frame[img_y1:img_y2, crop_x1:crop_x2] = pip_crop
+            frame[img_y1:img_y2, mask_x1:mask_x2] = pip_mask_bgr
+
+            # Thin frames around the image crops
+            cv2.rectangle(frame, (crop_x1, img_y1), (crop_x2, img_y2), (120, 120, 120), 1)
+            cv2.rectangle(frame, (mask_x1, img_y1), (mask_x2, img_y2), (120, 120, 120), 1)
+
+            # State and pixel statistics footer
+            cv2.putText(
+                frame,
+                f"STATE: {tl_state}",
+                (crop_x1, img_y2 + 22),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.52,
+                status_color,
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                frame,
+                f"Red: {tl_red_pixel_count} px (th=5)",
+                (crop_x1, img_y2 + 42),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.42,
+                (200, 200, 200),
                 1,
                 cv2.LINE_AA,
             )
