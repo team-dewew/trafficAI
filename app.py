@@ -371,7 +371,7 @@ st.markdown(
     }
 
     /* =========================================================================
-       SIDEBAR: ZERO-SCROLL, ULTRA-MINIMALIST, MODERN WEB APP STYLE
+       SIDEBAR: ZERO-SCROLL, ZERO-VOID, COLLAPSE BUTTON SEAMLESS INTEGRATION
        ========================================================================= */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #040814 0%, #060b18 50%, #030712 100%) !important;
@@ -380,37 +380,119 @@ st.markdown(
         overflow-y: hidden !important;
     }
     
-    /* Remove huge default padding of Streamlit */
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 0.85rem !important;
-        padding-bottom: 0.5rem !important;
-        padding-left: 0.75rem !important;
-        padding-right: 0.75rem !important;
+    [data-testid="stSidebarContent"] {
+        padding-top: 0 !important;
+        overflow-y: hidden !important;
     }
 
-    /* Minimalist Brand Bar */
+    /* Collapse Streamlit default sidebar header so it takes 0 vertical space */
+    [data-testid="stSidebarHeader"] {
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        position: relative !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* Position the open/close collapse button (<<) seamlessly in the brand row */
+    [data-testid="stSidebarCollapseButton"] {
+        position: absolute !important;
+        top: 8px !important;
+        right: 10px !important;
+        z-index: 999999 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] button {
+        background: rgba(15, 23, 42, 0.8) !important;
+        border: 1px solid rgba(56, 189, 248, 0.25) !important;
+        border-radius: 6px !important;
+        width: 26px !important;
+        height: 26px !important;
+        min-width: 26px !important;
+        min-height: 26px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #94a3b8 !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] button:hover {
+        background: rgba(30, 41, 59, 0.95) !important;
+        border-color: #00f2fe !important;
+        color: #00f2fe !important;
+        box-shadow: 0 0 10px rgba(0, 242, 254, 0.35) !important;
+        transform: scale(1.05) !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"] button svg {
+        fill: currentColor !important;
+        stroke: currentColor !important;
+        width: 15px !important;
+        height: 15px !important;
+    }
+
+    /* Expand sidebar button (>>) when collapsed */
+    [data-testid="stSidebarCollapsedControl"] {
+        top: 10px !important;
+        left: 10px !important;
+        z-index: 999999 !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] button {
+        background: rgba(15, 23, 42, 0.85) !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-radius: 6px !important;
+        color: #00f2fe !important;
+        box-shadow: 0 0 12px rgba(0, 242, 254, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+    [data-testid="stSidebarCollapsedControl"] button:hover {
+        background: rgba(30, 41, 59, 1) !important;
+        border-color: #00f2fe !important;
+        transform: scale(1.05) !important;
+    }
+
+    /* Remove empty top margin/padding on user content container */
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 8px !important;
+        padding-bottom: 4px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
+    /* Minimalist Brand Bar: Integrated on same row with collapse button */
     .sidebar-brand-minimal {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        padding: 4px 2px 2px 2px;
+        gap: 8px;
+        padding: 0 32px 0 2px; /* 32px right padding keeps clear of << button */
         margin-bottom: 2px;
+        height: 26px;
     }
     .brand-left {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
     }
     .brand-dot {
-        width: 9px;
-        height: 9px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: #00f2fe;
-        box-shadow: 0 0 10px #00f2fe;
+        box-shadow: 0 0 8px #00f2fe;
     }
     .brand-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 1.05rem;
+        font-size: 1.02rem;
         font-weight: 800;
         color: #f8fafc;
         letter-spacing: -0.3px;
@@ -420,21 +502,21 @@ st.markdown(
     }
     .brand-status-tag {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
+        font-size: 0.62rem;
         font-weight: 700;
         color: #10b981;
         background: rgba(16, 185, 129, 0.12);
         border: 1px solid rgba(16, 185, 129, 0.35);
-        padding: 2px 7px;
-        border-radius: 12px;
-        letter-spacing: 0.6px;
+        padding: 1px 6px;
+        border-radius: 10px;
+        letter-spacing: 0.5px;
     }
     .sidebar-subtext {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.68rem;
+        font-size: 0.66rem;
         color: #64748b;
-        margin-top: 2px;
-        margin-bottom: 8px;
+        margin-top: 1px;
+        margin-bottom: 6px;
         padding-left: 2px;
     }
 
