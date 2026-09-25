@@ -371,18 +371,16 @@ st.markdown(
     }
 
     /* =========================================================================
-       SIDEBAR: ZERO-SCROLL, ZERO-VOID, COLLAPSE BUTTON SEAMLESS INTEGRATION
+       SIDEBAR: BALANCED BREATHING ROOM, LEFT-ALIGNED NAV & CLEAN RUNTIME SPECS
        ========================================================================= */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #040814 0%, #060b18 50%, #030712 100%) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.16) !important;
         padding-top: 0 !important;
-        overflow-y: hidden !important;
     }
     
     [data-testid="stSidebarContent"] {
         padding-top: 0 !important;
-        overflow-y: hidden !important;
     }
 
     /* Collapse Streamlit default sidebar header so it takes 0 vertical space */
@@ -397,11 +395,11 @@ st.markdown(
         background: transparent !important;
     }
 
-    /* Position the open/close collapse button (<<) seamlessly in the brand row */
+    /* Position the open/close collapse button (<<) comfortably in the brand row */
     [data-testid="stSidebarCollapseButton"] {
         position: absolute !important;
-        top: 8px !important;
-        right: 10px !important;
+        top: 20px !important;
+        right: 14px !important;
         z-index: 999999 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -410,27 +408,27 @@ st.markdown(
     }
 
     [data-testid="stSidebarCollapseButton"] button {
-        background: rgba(15, 23, 42, 0.8) !important;
-        border: 1px solid rgba(56, 189, 248, 0.25) !important;
-        border-radius: 6px !important;
-        width: 26px !important;
-        height: 26px !important;
-        min-width: 26px !important;
-        min-height: 26px !important;
+        background: rgba(15, 23, 42, 0.85) !important;
+        border: 1px solid rgba(56, 189, 248, 0.28) !important;
+        border-radius: 7px !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
         padding: 0 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         color: #94a3b8 !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
     }
 
     [data-testid="stSidebarCollapseButton"] button:hover {
-        background: rgba(30, 41, 59, 0.95) !important;
+        background: rgba(30, 41, 59, 1) !important;
         border-color: #00f2fe !important;
         color: #00f2fe !important;
-        box-shadow: 0 0 10px rgba(0, 242, 254, 0.35) !important;
+        box-shadow: 0 0 12px rgba(0, 242, 254, 0.4) !important;
         transform: scale(1.05) !important;
     }
 
@@ -443,16 +441,16 @@ st.markdown(
 
     /* Expand sidebar button (>>) when collapsed */
     [data-testid="stSidebarCollapsedControl"] {
-        top: 10px !important;
-        left: 10px !important;
+        top: 14px !important;
+        left: 14px !important;
         z-index: 999999 !important;
     }
     [data-testid="stSidebarCollapsedControl"] button {
-        background: rgba(15, 23, 42, 0.85) !important;
-        border: 1px solid rgba(56, 189, 248, 0.3) !important;
-        border-radius: 6px !important;
+        background: rgba(15, 23, 42, 0.9) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 7px !important;
         color: #00f2fe !important;
-        box-shadow: 0 0 12px rgba(0, 242, 254, 0.25) !important;
+        box-shadow: 0 0 14px rgba(0, 242, 254, 0.28) !important;
         transition: all 0.2s ease !important;
     }
     [data-testid="stSidebarCollapsedControl"] button:hover {
@@ -461,62 +459,62 @@ st.markdown(
         transform: scale(1.05) !important;
     }
 
-    /* Remove empty top margin/padding on user content container */
+    /* Sidebar Content: comfortable, natural breathing room */
     section[data-testid="stSidebar"] .block-container {
-        padding-top: 8px !important;
-        padding-bottom: 4px !important;
-        padding-left: 10px !important;
-        padding-right: 10px !important;
+        padding-top: 20px !important;
+        padding-bottom: 20px !important;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
     }
 
-    /* Minimalist Brand Bar: Integrated on same row with collapse button */
+    /* Brand Bar: natural spacing */
     .sidebar-brand-minimal {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 0 32px 0 2px; /* 32px right padding keeps clear of << button */
-        margin-bottom: 2px;
-        height: 26px;
+        padding: 0 38px 0 2px;
+        margin-bottom: 4px;
+        height: 30px;
     }
     .brand-left {
         display: flex;
         align-items: center;
-        gap: 7px;
+        gap: 8px;
     }
     .brand-dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: #00f2fe;
-        box-shadow: 0 0 8px #00f2fe;
+        box-shadow: 0 0 10px #00f2fe;
     }
     .brand-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 1.02rem;
+        font-size: 1.08rem;
         font-weight: 800;
         color: #f8fafc;
-        letter-spacing: -0.3px;
+        letter-spacing: -0.2px;
     }
     .brand-highlight {
         color: #00f2fe;
     }
     .brand-status-tag {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.62rem;
+        font-size: 0.64rem;
         font-weight: 700;
         color: #10b981;
         background: rgba(16, 185, 129, 0.12);
         border: 1px solid rgba(16, 185, 129, 0.35);
-        padding: 1px 6px;
-        border-radius: 10px;
+        padding: 2px 7px;
+        border-radius: 12px;
         letter-spacing: 0.5px;
     }
     .sidebar-subtext {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.66rem;
+        font-size: 0.68rem;
         color: #64748b;
-        margin-top: 1px;
-        margin-bottom: 6px;
+        margin-top: 4px;
+        margin-bottom: 12px;
         padding-left: 2px;
     }
 
@@ -524,7 +522,7 @@ st.markdown(
     .sidebar-divider {
         height: 1px;
         background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.25) 50%, transparent 100%);
-        margin: 8px 0 10px 0;
+        margin: 12px 0 14px 0;
         width: 100%;
     }
 
@@ -534,114 +532,132 @@ st.markdown(
         font-size: 0.68rem;
         font-weight: 700;
         color: #38bdf8;
-        letter-spacing: 1.2px;
+        letter-spacing: 1.3px;
         text-transform: uppercase;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         padding-left: 2px;
     }
 
     /* Navigation Buttons Container */
     section[data-testid="stSidebar"] .stButton {
-        margin-bottom: 3px !important;
+        margin-bottom: 5px !important;
     }
     section[data-testid="stSidebar"] .stButton > button {
         width: 100% !important;
         text-align: left !important;
         justify-content: flex-start !important;
-        padding: 8px 12px !important;
-        font-size: 0.82rem !important;
+        padding: 9px 14px !important;
+        font-size: 0.85rem !important;
         font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 600 !important;
         letter-spacing: 0.2px !important;
-        border-radius: 6px !important;
-        transition: all 0.18s ease !important;
-        min-height: 36px !important;
-        line-height: 1.2 !important;
+        border-radius: 7px !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        min-height: 40px !important;
+        line-height: 1.3 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button div,
+    section[data-testid="stSidebar"] .stButton > button div p,
+    section[data-testid="stSidebar"] .stButton > button p {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0 !important;
     }
 
     /* Inactive Nav Button */
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"],
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
         background: rgba(15, 23, 42, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(255, 255, 255, 0.07) !important;
         color: #94a3b8 !important;
         box-shadow: none !important;
     }
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
-        background: rgba(30, 41, 59, 0.8) !important;
-        border-color: rgba(56, 189, 248, 0.4) !important;
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(56, 189, 248, 0.45) !important;
         color: #f8fafc !important;
-        transform: translateX(3px) !important;
+        transform: translateX(4px) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
     }
 
     /* Active Nav Button */
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: linear-gradient(90deg, rgba(2, 132, 199, 0.3) 0%, rgba(14, 165, 233, 0.1) 100%) !important;
+        background: linear-gradient(90deg, rgba(2, 132, 199, 0.35) 0%, rgba(14, 165, 233, 0.12) 100%) !important;
         border: 1px solid #00f2fe !important;
-        border-left: 3px solid #00f2fe !important;
+        border-left: 4px solid #00f2fe !important;
         color: #00f2fe !important;
         font-weight: 700 !important;
-        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
+        box-shadow: 0 0 16px rgba(0, 242, 254, 0.25) !important;
         transform: translateX(2px) !important;
     }
 
-    /* Compact Telemetry Micro-Card */
-    .sidebar-telemetry-compact {
+    /* Clean, Spacious Runtime Specs Card */
+    .sidebar-specs-card {
         background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 8px;
-        padding: 9px 11px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 9px;
+        padding: 13px 14px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     }
-    .telem-header {
+    .specs-title {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.66rem;
+        font-size: 0.68rem;
         font-weight: 700;
         color: #38bdf8;
-        letter-spacing: 0.8px;
-        margin-bottom: 6px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        text-transform: uppercase;
     }
-    .telem-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 5px;
-    }
-    .telem-item {
+    .specs-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 0.72rem;
+        padding: 5px 0;
+        font-size: 0.77rem;
         font-family: 'JetBrains Mono', monospace;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     }
-    .telem-item .k {
-        color: #64748b;
+    .specs-row:last-child {
+        border-bottom: none;
+        padding-bottom: 2px;
     }
-    .telem-item .v {
-        color: #cbd5e1;
+    .specs-label {
+        color: #94a3b8;
+        font-size: 0.75rem;
+    }
+    .specs-val {
+        color: #f1f5f9;
         font-weight: 600;
-        background: rgba(30, 41, 59, 0.5);
-        padding: 1px 5px;
-        border-radius: 3px;
-        font-size: 0.68rem;
+        background: rgba(30, 41, 59, 0.6);
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 0.73rem;
     }
-    .telem-item .v.emerald {
+    .specs-val.emerald {
         color: #10b981;
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.35);
     }
-    .telem-item .v.cyan {
+    .specs-val.cyan {
         color: #00f2fe;
-        background: rgba(0, 242, 254, 0.1);
-        border: 1px solid rgba(0, 242, 254, 0.3);
+        background: rgba(0, 242, 254, 0.12);
+        border-color: rgba(0, 242, 254, 0.35);
     }
 
     /* Minimal Footer */
     .sidebar-footer-minimal {
-        padding: 8px 2px 2px 2px;
-        font-size: 0.68rem;
+        padding: 10px 2px 2px 2px;
+        font-size: 0.7rem;
         color: #64748b;
         text-align: center;
         font-family: 'JetBrains Mono', monospace;
@@ -852,15 +868,27 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-divider"></div>
-        <div class="sidebar-telemetry-compact">
-            <div class="telem-header">RUNTIME SPECS</div>
-            <div class="telem-grid">
-                <div class="telem-item"><span class="k">DET</span><span class="v">YOLO11L</span></div>
-                <div class="telem-item"><span class="k">ANOM</span><span class="v">YOLOv8x</span></div>
-                <div class="telem-item"><span class="k">TRACK</span><span class="v">ByteTrack</span></div>
-                <div class="telem-item"><span class="k">GPU</span><span class="v emerald">RTX 3050</span></div>
-                <div class="telem-item"><span class="k">SEED</span><span class="v cyan">42</span></div>
-                <div class="telem-item"><span class="k">MAX</span><span class="v">10 GB</span></div>
+        <div class="sidebar-specs-card">
+            <div class="specs-title">RUNTIME SPECIFICATIONS</div>
+            <div class="specs-row">
+                <span class="specs-label">Primary Detector</span>
+                <span class="specs-val">YOLO11 Large</span>
+            </div>
+            <div class="specs-row">
+                <span class="specs-label">Anomaly Model</span>
+                <span class="specs-val">YOLOv8x Crash</span>
+            </div>
+            <div class="specs-row">
+                <span class="specs-label">Object Tracker</span>
+                <span class="specs-val">ByteTrack (Causal)</span>
+            </div>
+            <div class="specs-row">
+                <span class="specs-label">Hardware Device</span>
+                <span class="specs-val emerald">NVIDIA RTX 3050</span>
+            </div>
+            <div class="specs-row">
+                <span class="specs-label">Determinism</span>
+                <span class="specs-val cyan">Seed 42 Locked</span>
             </div>
         </div>
         <div class="sidebar-footer-minimal">v2.4 • Deterministic Evaluation</div>
