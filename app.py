@@ -274,6 +274,68 @@ st.markdown(
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
 
+    /* Telemetry HUD Grid */
+    .hud-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin: 10px 0 10px 0;
+    }
+    .hud-chip {
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        border-radius: 8px;
+        padding: 8px 12px;
+        position: relative;
+    }
+    .hud-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.64rem;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+    .hud-val {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #00f2fe;
+        line-height: 1.15;
+    }
+    .hud-sub {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: #64748b;
+        margin-top: 2px;
+    }
+    .hud-status-strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 6px 10px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+    }
+    .hud-status-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.15);
+        padding: 1px 6px;
+        border-radius: 4px;
+        letter-spacing: 0.5px;
+    }
+    .hud-status-text {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        color: #94a3b8;
+    }
+
     /* Team Badge Cards */
     .team-badge-card {
         background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 32, 0.95) 100%);
@@ -377,25 +439,47 @@ st.markdown(
         border-color: #00f2fe;
     }
 
-    /* Primary Action Button */
+    /* Main Canvas Action Buttons */
     .main .stButton > button {
+        border-radius: 8px !important;
+        font-family: 'Space Grotesk', sans-serif !important;
+        letter-spacing: 0.1px !important;
+        transition: all 0.2s ease !important;
+    }
+    .main .stButton > button[kind="primary"],
+    .main .stButton > button[data-testid="stBaseButton-primary"] {
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
         color: #ffffff !important;
-        font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 700 !important;
-        font-size: 0.96rem !important;
-        letter-spacing: 0.2px !important;
+        font-size: 0.94rem !important;
         border: 1px solid rgba(0, 242, 254, 0.4) !important;
-        border-radius: 8px !important;
-        padding: 10px 22px !important;
-        transition: all 0.2s ease !important;
+        padding: 9px 20px !important;
         box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3) !important;
     }
-    .main .stButton > button:hover {
+    .main .stButton > button[kind="primary"]:hover,
+    .main .stButton > button[data-testid="stBaseButton-primary"]:hover {
         background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
         border-color: #00f2fe !important;
         box-shadow: 0 6px 18px rgba(0, 242, 254, 0.45) !important;
         transform: translateY(-1px) !important;
+    }
+
+    /* Secondary / Segmented Tab Buttons in Main Canvas */
+    .main .stButton > button[kind="secondary"],
+    .main .stButton > button[data-testid="stBaseButton-secondary"] {
+        background: rgba(15, 23, 42, 0.8) !important;
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+        font-size: 0.86rem !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding: 8px 16px !important;
+        box-shadow: none !important;
+    }
+    .main .stButton > button[kind="secondary"]:hover,
+    .main .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+        background: rgba(30, 41, 59, 0.9) !important;
+        color: #f8fafc !important;
+        border-color: rgba(56, 189, 248, 0.35) !important;
     }
 
     /* Clean Tabs */
@@ -1621,145 +1705,198 @@ elif selected_section == "Live Demo":
         module_num="05",
         eyebrow_suffix="LIVE INFERENCE CONSOLE",
         title="Live Video Analytics & Risk Console",
-        subtitle="Upload custom surveillance feeds (up to 10GB) or choose pre-loaded feeds to run end-to-end inference.",
+        subtitle="Upload custom surveillance feeds (up to 10GB) or select calibrated benchmark feeds to execute end-to-end inference.",
         badge_text="ENGINE READY",
         mini_spec="REAL-TIME GPU INFERENCE",
     )
 
-    demo_c1, demo_c2 = st.columns([1, 1])
+    # ------------------------------------------------------------------------
+    # State & Source Initialization
+    # ------------------------------------------------------------------------
+    if "live_input_mode" not in st.session_state:
+        st.session_state["live_input_mode"] = "benchmark"
+
+    samples_dir = Path("samples")
+    if not samples_dir.exists():
+        samples_dir = (Path(__file__).resolve().parent / "samples")
+
+    known_samples = ["C3905.MP4", "C3896.MP4", "C3897.MP4", "C3902.MP4"]
+    found_samples = [s for s in known_samples if (samples_dir / s).exists()]
+    if not found_samples and samples_dir.exists():
+        found_samples = sorted([p.name for p in samples_dir.glob("*.mp4")] + [p.name for p in samples_dir.glob("*.MP4")])
+
+    sample_labels = {
+        "C3905.MP4": "C3905.MP4 (Short Daytime - 2m 07s | 4K UHD)",
+        "C3896.MP4": "C3896.MP4 (Daytime Traffic - 5m 40s | 4K UHD)",
+        "C3897.MP4": "C3897.MP4 (Dense Traffic - 5m 17s | 4K UHD)",
+        "C3902.MP4": "C3902.MP4 (Evening Shifted - 5m 17s | 4K UHD)",
+    }
+
+    if "live_bench_choice" not in st.session_state:
+        st.session_state["live_bench_choice"] = found_samples[0] if found_samples else None
+
+    # Pre-resolve target video path before rendering columns
     target_video_path = None
     display_name = ""
 
-    with demo_c1:
+    if st.session_state["live_input_mode"] == "benchmark":
+        bench_sel = st.session_state.get("live_bench_choice")
+        if bench_sel and (samples_dir / bench_sel).exists():
+            target_video_path = str((samples_dir / bench_sel).resolve())
+            display_name = bench_sel
+    else:
+        target_video_path = st.session_state.get("uploaded_video_path")
+        display_name = st.session_state.get("uploaded_display_name", "")
+
+    # ------------------------------------------------------------------------
+    # Two-Column Command Deck: Left = Video/Spatial | Right = Controls/Telemetry
+    # ------------------------------------------------------------------------
+    col_feed, col_deck = st.columns([1.18, 0.82], gap="large")
+
+    # LEFT COLUMN: Stream Player & 21-Zone Geometric Map
+    with col_feed:
         st.markdown(
             """
             <div class="section-header-block" style="margin-top: 0;">
-                <div class="section-eyebrow">STEP 01 // INPUT FEED</div>
-                <h2 class="section-heading-h2">Source Selection & Calibration</h2>
+                <div class="section-eyebrow">STEP 01 // STREAM PREVIEW & SPATIAL GEOMETRY</div>
+                <h2 class="section-heading-h2">Active Surveillance Stream</h2>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        input_choice = st.radio(
-            "Choose Video Source:",
-            ["Select Pre-loaded Benchmark Sample", "Upload Custom Surveillance Video (.mp4)"],
-            horizontal=True,
-        )
 
-        if input_choice == "Select Pre-loaded Benchmark Sample":
-            samples_dir = Path("samples")
-            if not samples_dir.exists():
-                samples_dir = (Path(__file__).resolve().parent / "samples")
-
-            known_samples = ["C3905.MP4", "C3896.MP4", "C3897.MP4", "C3902.MP4"]
-            found_samples = [s for s in known_samples if (samples_dir / s).exists()]
-            if not found_samples and samples_dir.exists():
-                found_samples = sorted([p.name for p in samples_dir.glob("*.mp4")] + [p.name for p in samples_dir.glob("*.MP4")])
-
-            sample_labels = {
-                "C3905.MP4": "C3905.MP4 (Short Daytime - 2m 07s | 4K UHD)",
-                "C3896.MP4": "C3896.MP4 (Daytime Traffic - 5m 40s | 4K UHD)",
-                "C3897.MP4": "C3897.MP4 (Dense Traffic - 5m 17s | 4K UHD)",
-                "C3902.MP4": "C3902.MP4 (Evening Shifted - 5m 17s | 4K UHD)",
-            }
-
-            if found_samples:
-                selected_file = st.selectbox(
-                    "Select Benchmark Feed:",
-                    options=found_samples,
-                    format_func=lambda s: sample_labels.get(s, s),
-                )
-                candidate_path = (Path("samples") / selected_file).resolve()
-                if candidate_path.exists():
-                    target_video_path = str(candidate_path)
-                    display_name = selected_file
-                else:
-                    st.error(f"Sample video file not found at: `{candidate_path}`")
-            else:
-                st.error("No sample videos found in `samples/` directory.")
-
-        elif input_choice == "Upload Custom Surveillance Video (.mp4)":
-            uploaded_file = st.file_uploader(
-                "Upload Surveillance Feed (.mp4) - Up to 10GB Supported",
-                type=["mp4", "MP4"],
-                help="High-capacity uploader configured up to 10GB.",
-            )
-            if uploaded_file is not None:
-                upload_destination = Path("temp_uploaded.mp4").resolve()
-                current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-                if st.session_state.get("last_uploaded_id") != current_file_id:
-                    with open(upload_destination, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    st.session_state["last_uploaded_id"] = current_file_id
-
-                target_video_path = "temp_uploaded.mp4"
-                display_name = uploaded_file.name
-                st.success(f"Video loaded: `{display_name}` ({uploaded_file.size / (1024*1024):.1f} MB)")
-
-        # Stream Telemetry Banner
-        if target_video_path and Path(target_video_path).exists():
-            meta = get_video_metadata(target_video_path)
-            if meta:
-                st.markdown(
-                    f"""
-                    <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 0.82rem; line-height: 1.6; font-family: 'JetBrains Mono', monospace;">
-                        <span style="color:#00f2fe; font-weight:700;">STREAM TELEMETRY</span><br>
-                        <span style="color:#94a3b8;">Resolution:</span> <b>{meta.get('resolution')}</b> &nbsp;|&nbsp; 
-                        <span style="color:#94a3b8;">Framerate:</span> <b>{meta.get('fps')} FPS</b><br>
-                        <span style="color:#94a3b8;">Duration:</span> <b>{meta.get('duration_sec')}s ({meta.get('total_frames')} frames)</b> &nbsp;|&nbsp; 
-                        <span style="color:#94a3b8;">Size:</span> <b>{meta.get('size_mb')} MB</b>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-    with demo_c2:
-        st.markdown(
-            """
-            <div class="section-header-block" style="margin-top: 0;">
-                <div class="section-eyebrow">STEP 02 // STREAM PREVIEW</div>
-                <h2 class="section-heading-h2">Live Video & Spatial Geometry</h2>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
         if target_video_path is not None and Path(target_video_path).exists():
-            preview_tabs = st.tabs(["Video Stream", "21-Zone Geometric Map"])
+            preview_tabs = st.tabs(["Video Stream Playback", "21-Zone Geometric Map"])
 
             with preview_tabs[0]:
                 preview_bytes, preview_status = get_preview_media(target_video_path, display_name)
                 if preview_bytes is not None:
                     st.video(preview_bytes)
-                    st.caption(f"Active Stream: `{display_name}` • {preview_status}")
+                    st.caption(f"Active Feed: `{display_name}` • {preview_status}")
                 else:
                     st.info(f"{preview_status}")
 
             with preview_tabs[1]:
                 zone_vis = render_zone_overlay(target_video_path)
                 if zone_vis is not None:
-                    st.image(zone_vis, caption="Vectorized Spatial Map: Red Stop Line (Red), Jam Line (Yellow), Crosswalk Zebras (Blue), Concrete Dividers (Magenta), Travel Lanes (Green)", use_container_width=True)
+                    st.image(
+                        zone_vis,
+                        caption="Vectorized Spatial Calibration: Red Stop Line, Yellow Jam Line, Blue Zebras, Magenta Dividers, Green Travel Lanes",
+                        use_container_width=True,
+                    )
                 else:
                     st.caption("Spatial calibration map unavailable for this feed.")
         else:
-            st.info("Upload an MP4 file or select a pre-loaded sample above to activate preview.")
+            st.info("Select or upload a video feed on the right to activate real-time stream playback.")
 
-    st.markdown(
-        """
-        <div class="section-header-block">
-            <div class="section-eyebrow">STEP 03 // REAL-TIME INFERENCE</div>
-            <h2 class="section-heading-h2">Execution Engine Pipeline</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # RIGHT COLUMN: Source Selector, Telemetry HUD & Trigger
+    with col_deck:
+        st.markdown(
+            """
+            <div class="section-header-block" style="margin-top: 0;">
+                <div class="section-eyebrow">STEP 02 // INGEST & TELEMETRY CONTROLS</div>
+                <h2 class="section-heading-h2">Feed Config & HUD Telemetry</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    if target_video_path is not None:
-        run_btn = st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
-    else:
-        st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
-        st.info("Select a pre-loaded sample video or upload an MP4 feed above to enable execution.")
-        run_btn = False
+        # Segmented Pill Mode Switcher (Benchmark vs Upload)
+        active_mode = st.session_state.get("live_input_mode", "benchmark")
+        b_c1, b_c2 = st.columns(2)
+        with b_c1:
+            if st.button("Benchmark Feeds (4)", type="primary" if active_mode == "benchmark" else "secondary", use_container_width=True, key="btn_mode_bench"):
+                st.session_state["live_input_mode"] = "benchmark"
+                st.rerun()
+        with b_c2:
+            if st.button("Upload Feed (.mp4)", type="primary" if active_mode == "upload" else "secondary", use_container_width=True, key="btn_mode_upload"):
+                st.session_state["live_input_mode"] = "upload"
+                st.rerun()
 
+        # Ingest Control: Benchmark Select or File Uploader
+        if active_mode == "benchmark":
+            if found_samples:
+                curr_idx = found_samples.index(st.session_state["live_bench_choice"]) if st.session_state.get("live_bench_choice") in found_samples else 0
+                chosen_sample = st.selectbox(
+                    "Benchmark Stream Feed:",
+                    options=found_samples,
+                    index=curr_idx,
+                    format_func=lambda s: sample_labels.get(s, s),
+                    key="sel_bench_feed",
+                )
+                if chosen_sample != st.session_state.get("live_bench_choice"):
+                    st.session_state["live_bench_choice"] = chosen_sample
+                    st.rerun()
+            else:
+                st.error("No sample videos detected in `samples/` directory.")
+        else:
+            uploaded_file = st.file_uploader(
+                "Upload Surveillance Feed (.mp4) - Up to 10GB Supported",
+                type=["mp4", "MP4"],
+                help="High-capacity stream uploader up to 10GB.",
+                key="file_uploader_deck",
+            )
+            if uploaded_file is not None:
+                upload_dest = Path("temp_uploaded.mp4").resolve()
+                current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+                if st.session_state.get("last_uploaded_id") != current_file_id:
+                    with open(upload_dest, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.session_state["last_uploaded_id"] = current_file_id
+                    st.session_state["uploaded_video_path"] = str(upload_dest)
+                    st.session_state["uploaded_display_name"] = uploaded_file.name
+                    st.rerun()
+
+        # Extract Telemetry Metadata
+        meta = get_video_metadata(target_video_path) if target_video_path and Path(target_video_path).exists() else None
+        res_val = meta.get('resolution', 'Offline') if meta else 'Offline'
+        fps_val = f"{meta.get('fps', '0')} FPS" if meta else '0 FPS'
+        dur_val = f"{meta.get('duration_sec', '0')}s" if meta else '0s'
+        frames_sub = f"{meta.get('total_frames', '0')} frames" if meta else 'Feed idle'
+        size_val = f"{meta.get('size_mb', '0')} MB" if meta else '0 MB'
+
+        # 4-Chip Telemetry HUD
+        st.markdown(
+            f"""
+            <div class="hud-grid">
+                <div class="hud-chip">
+                    <div class="hud-label">FRAME RESOLUTION</div>
+                    <div class="hud-val">{res_val}</div>
+                    <div class="hud-sub">Native 4K / UHD</div>
+                </div>
+                <div class="hud-chip">
+                    <div class="hud-label">ACQUISITION RATE</div>
+                    <div class="hud-val">{fps_val}</div>
+                    <div class="hud-sub">Temporal Density</div>
+                </div>
+                <div class="hud-chip">
+                    <div class="hud-label">STREAM DURATION</div>
+                    <div class="hud-val">{dur_val}</div>
+                    <div class="hud-sub">{frames_sub}</div>
+                </div>
+                <div class="hud-chip">
+                    <div class="hud-label">PAYLOAD SIZE</div>
+                    <div class="hud-val">{size_val}</div>
+                    <div class="hud-sub">H.264 Container</div>
+                </div>
+            </div>
+            <div class="hud-status-strip">
+                <span class="hud-dot"></span>
+                <span>CALIBRATION: <b>Tashkent Sebzor-Ganga (21 Vector Zones Loaded)</b></span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Primary Execution Trigger
+        if target_video_path is not None and Path(target_video_path).exists():
+            run_btn = st.button("EXECUTE AI PIPELINE (PARTS A & B)", type="primary", use_container_width=True, key="exec_pipeline_btn")
+        else:
+            st.button("EXECUTE AI PIPELINE (PARTS A & B)", type="primary", use_container_width=True, disabled=True, key="exec_pipeline_btn_disabled")
+            st.caption("Select or upload an active surveillance stream above to initiate pipeline.")
+            run_btn = False
+
+    # Pipeline Processing Handler
     if run_btn:
         target_resolved = Path(target_video_path).resolve()
         if not target_resolved.exists():
@@ -1850,7 +1987,9 @@ elif selected_section == "Live Demo":
             st.session_state["cached_timestamps"] = timestamps
             st.session_state["cached_elapsed"] = total_elapsed
 
-    # Display results if present in session state
+    # ------------------------------------------------------------------------
+    # STEP 03: Telemetry Results & Risk Analytics Deck
+    # ------------------------------------------------------------------------
     if "cached_events" in st.session_state and st.session_state.get("cached_video") == target_video_path:
         events = st.session_state["cached_events"]
         risk_scores = st.session_state["cached_risk"]
@@ -1860,15 +1999,15 @@ elif selected_section == "Live Demo":
 
         st.markdown(
             """
-            <div class="section-header-block">
-                <div class="section-eyebrow">STEP 04 // RESULTS</div>
-                <h2 class="section-heading-h2">Live Surveillance Telemetry & Risk Analytics</h2>
+            <div class="section-header-block" style="margin-top: 36px;">
+                <div class="section-eyebrow">STEP 03 // TELEMETRY RESULTS & RISK AUDIT</div>
+                <h2 class="section-heading-h2">Inference Output & Post-Mortem Diagnostics</h2>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # KPI metric cards
+        # 4 KPI metric cards across the top
         k1, k2, k3, k4 = st.columns(4)
         with k1:
             st.markdown(
@@ -1881,15 +2020,15 @@ elif selected_section == "Live Demo":
             max_r = max(risk_scores) if risk_scores else 0.0
             st.markdown(
                 f'<div class="metric-card"><div class="metric-value">{max_r:.2f}</div>'
-                f'<div class="metric-label">Max Accident Risk</div>'
-                f'<div class="metric-sub">Peak hazard score</div></div>',
+                f'<div class="metric-label">Max Hazard Risk P(t)</div>'
+                f'<div class="metric-sub">Peak causal score</div></div>',
                 unsafe_allow_html=True,
             )
         with k3:
             st.markdown(
                 f'<div class="metric-card"><div class="metric-value">{total_elapsed:.1f}s</div>'
-                f'<div class="metric-label">Processing Time</div>'
-                f'<div class="metric-sub">Fast GPU runtime</div></div>',
+                f'<div class="metric-label">Total Runtime</div>'
+                f'<div class="metric-sub">GPU inference speed</div></div>',
                 unsafe_allow_html=True,
             )
         with k4:
@@ -1900,52 +2039,58 @@ elif selected_section == "Live Demo":
                 unsafe_allow_html=True,
             )
 
-        st.markdown(
-            """
-            <div class="section-header-block">
-                <div class="section-eyebrow">PART A // DETECTIONS</div>
-                <h2 class="section-heading-h2">Detected Traffic Violations & Temporal Segments</h2>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if events:
-            df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Violation Label"])
-            df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(3)
+        # Split 2-Column Deck: Part A on Left, Part B on Right
+        res_col1, res_col2 = st.columns([1.12, 0.88], gap="large")
 
-            avail_labels = sorted(df["Violation Label"].unique())
-            filter_labels = st.multiselect("Filter Violation Classes:", avail_labels, default=avail_labels, key="live_filter")
-            filtered_df = df[df["Violation Label"].isin(filter_labels)]
-
-            st.dataframe(filtered_df, use_container_width=True, height=280)
-
-            export_payload = json.dumps({"events": events, "risk": list(zip(timestamps, risk_scores))}, indent=2)
-            st.download_button(
-                label="Export Predictions JSON (Official Hackathon Format)",
-                data=export_payload,
-                file_name=f"predictions_{Path(cached_name).stem}.json",
-                mime="application/json",
+        with res_col1:
+            st.markdown(
+                """
+                <div class="section-header-block">
+                    <div class="section-eyebrow">PART A // DETECTIONS</div>
+                    <h2 class="section-heading-h2">Detected Traffic Violations</h2>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
-        else:
-            st.info("No traffic violations or incidents detected in this stream.")
+            if events:
+                df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Violation Label"])
+                df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(3)
 
-        st.markdown(
-            """
-            <div class="section-header-block">
-                <div class="section-eyebrow">PART B // CAUSAL RISK</div>
-                <h2 class="section-heading-h2">Causal Accident Risk Curve P(t) [0.50 Alarm Threshold]</h2>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        if risk_scores:
-            df_risk = pd.DataFrame({
-                "Accident Risk P(t)": risk_scores,
-                "Alarm Threshold (0.50)": [0.50] * len(risk_scores),
-            }, index=timestamps if timestamps and len(timestamps) == len(risk_scores) else None)
+                avail_labels = sorted(df["Violation Label"].unique())
+                filter_labels = st.multiselect("Filter Violation Classes:", avail_labels, default=avail_labels, key="live_filter")
+                filtered_df = df[df["Violation Label"].isin(filter_labels)]
 
-            st.line_chart(df_risk, color=["#00f2fe", "#ef4444"])
-            st.caption("Temporal accident risk score P(t) with official 0.50 alarm threshold line (red). Evaluated causally without future frame leakage.")
+                st.dataframe(filtered_df, use_container_width=True, height=280)
+
+                export_payload = json.dumps({"events": events, "risk": list(zip(timestamps, risk_scores))}, indent=2)
+                st.download_button(
+                    label="Export Predictions JSON (Official Hackathon Format)",
+                    data=export_payload,
+                    file_name=f"predictions_{Path(cached_name).stem}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+            else:
+                st.info("No traffic violations or incidents detected in this stream.")
+
+        with res_col2:
+            st.markdown(
+                """
+                <div class="section-header-block">
+                    <div class="section-eyebrow">PART B // CAUSAL RISK</div>
+                    <h2 class="section-heading-h2">Accident Risk Curve P(t)</h2>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if risk_scores:
+                df_risk = pd.DataFrame({
+                    "Accident Risk P(t)": risk_scores,
+                    "Alarm Threshold (0.50)": [0.50] * len(risk_scores),
+                }, index=timestamps if timestamps and len(timestamps) == len(risk_scores) else None)
+
+                st.line_chart(df_risk, color=["#00f2fe", "#ef4444"], height=280)
+                st.caption("Temporal accident risk score P(t) with official 0.50 alarm threshold line (red). Evaluated causally without future frame leakage.")
 
 
 # ============================================================================
