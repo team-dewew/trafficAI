@@ -2,7 +2,12 @@ import json
 import os
 import tempfile
 import time
+import warnings
 from pathlib import Path
+
+# Suppress library deprecation and non-critical warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 import cv2
 import numpy as np

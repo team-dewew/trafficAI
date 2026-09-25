@@ -17,6 +17,12 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 import random
+import warnings
+
+# Suppress library deprecation warnings (e.g. ByteTrack FutureWarning in supervision) to maintain clean console
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
 import cv2
 import numpy as np
 import supervision as sv
