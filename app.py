@@ -17,7 +17,7 @@ import streamlit as st
 from solution import CLASSES, SCENE_CONFIG, RiskEstimator, detect_events
 
 # ----------------------------------------------------------------------------
-# Page Configuration (Minimalist, Professional)
+# Page Configuration
 # ----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Traffic AI — Surveillance Control Center",
@@ -27,7 +27,7 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------------------------
-# UI/UX Design System: Minimalist Swiss / Linear Dark Control Center
+# Senior Frontend UI/UX Design System (Linear / Vercel / Apple Developer)
 # ----------------------------------------------------------------------------
 st.markdown(
     """
@@ -49,81 +49,154 @@ st.markdown(
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Background & Main App Canvas */
+    /* Background Canvas */
     .stApp {
         background-color: #030712;
         background-image: 
-            radial-gradient(ellipse 90% 50% at 50% -10%, rgba(14, 165, 233, 0.08) 0%, transparent 60%),
-            radial-gradient(ellipse 70% 40% at 90% 90%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+            radial-gradient(ellipse 90% 50% at 50% -10%, rgba(14, 165, 233, 0.06) 0%, transparent 60%),
             linear-gradient(180deg, #030712 0%, #050b18 100%);
         color: #f1f5f9;
     }
 
-    /* Top Control Center Hero Banner */
-    .control-center-banner {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(11, 17, 32, 0.98) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.22);
-        border-top: 2px solid #00f2fe;
-        border-radius: 12px;
-        padding: 20px 24px;
+    /* Main Page Container: Balanced top padding and wide-canvas alignment */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        height: 2.25rem !important;
+        z-index: 100 !important;
+    }
+    
+    .main .block-container,
+    [data-testid="stMainBlockContainer"],
+    div[data-testid="stAppViewBlockContainer"] {
+        padding-top: 1.25rem !important;
+        padding-bottom: 2.5rem !important;
+        padding-left: 2.5rem !important;
+        padding-right: 2.5rem !important;
+        max-width: 1440px !important;
+        margin: 0 auto !important;
+    }
+
+    /* =========================================================================
+       PAGE HEADER (INTEGRATED TOP BAR ARCHITECTURE - NO FLOATING BOXES)
+       ========================================================================= */
+    .page-top-bar {
+        padding-bottom: 18px;
         margin-bottom: 22px;
-        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        position: relative;
+    }
+    .page-breadcrumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+    .crumb-prefix {
+        color: #64748b;
+    }
+    .crumb-sep {
+        color: #475569;
+        font-size: 0.65rem;
+    }
+    .crumb-module {
+        color: #38bdf8;
+    }
+    .crumb-current {
+        color: #94a3b8;
+    }
+    .page-header-row {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        gap: 20px;
         flex-wrap: wrap;
-        gap: 12px;
     }
-    
-    .hero-title-group {
-        display: flex;
-        flex-direction: column;
+    .page-title-block {
+        flex: 1;
+        min-width: 280px;
     }
-
-    .section-eyebrow {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.74rem;
-        font-weight: 700;
-        color: #38bdf8;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-        margin-bottom: 4px;
+    .page-h1 {
+        font-family: 'Space Grotesk', -apple-system, sans-serif !important;
+        font-size: 2.15rem !important;
+        font-weight: 800 !important;
+        color: #f8fafc !important;
+        letter-spacing: -0.03em !important;
+        line-height: 1.15 !important;
+        margin: 0 !important;
+    }
+    .page-description {
+        font-size: 0.90rem !important;
+        color: #94a3b8 !important;
+        line-height: 1.55 !important;
+        margin: 6px 0 0 0 !important;
+        max-width: 860px;
+    }
+    .page-status-block {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 10px;
+        padding-top: 4px;
     }
-    
-    .hero-title {
-        font-size: 1.95rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #f8fafc 0%, #00f2fe 55%, #38bdf8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-        line-height: 1.15;
-    }
-    
-    .hero-subtitle {
-        font-size: 0.9rem;
-        color: #94a3b8;
-        margin-top: 4px;
-        margin-bottom: 0;
-    }
-
-    /* High-Tech Status Badges */
-    .status-badge-live {
+    .status-pill {
         display: inline-flex;
         align-items: center;
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.45);
-        color: #10b981;
+        gap: 7px;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
         padding: 5px 12px;
         border-radius: 9999px;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.76rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        letter-spacing: 0.8px;
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        letter-spacing: 0.05em;
+    }
+    .pulse-indicator {
+        width: 6px;
+        height: 6px;
+        background: #10b981;
+        border-radius: 50%;
+        box-shadow: 0 0 8px #10b981;
+        animation: pulse-dot 1.8s infinite;
+    }
+    .spec-mini-pill {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        color: #94a3b8;
+    }
+
+    /* In-Page Section Headings */
+    .section-header-block {
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }
+    .section-eyebrow {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+    .section-heading-h2 {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-size: 1.35rem !important;
+        font-weight: 700 !important;
+        color: #f8fafc !important;
+        margin: 0 !important;
+        letter-spacing: -0.02em !important;
     }
     
     .status-dot {
@@ -144,20 +217,19 @@ st.markdown(
 
     /* KPI Metric Cards */
     .metric-card {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(10, 16, 30, 0.9) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.16);
+        border-radius: 9px;
         padding: 16px 18px;
         text-align: left;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
-        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .metric-card:hover {
         transform: translateY(-2px);
-        border-color: rgba(0, 242, 254, 0.45);
-        box-shadow: 0 8px 25px rgba(0, 242, 254, 0.12);
+        border-color: rgba(0, 242, 254, 0.4);
     }
     .metric-card::before {
         content: "";
@@ -177,7 +249,7 @@ st.markdown(
         line-height: 1.1;
     }
     .metric-label {
-        font-size: 0.76rem;
+        font-size: 0.74rem;
         font-weight: 700;
         color: #94a3b8;
         text-transform: uppercase;
@@ -186,7 +258,7 @@ st.markdown(
         font-family: 'JetBrains Mono', monospace;
     }
     .metric-sub {
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         color: #38bdf8;
         margin-top: 3px;
         font-weight: 500;
@@ -194,33 +266,33 @@ st.markdown(
 
     /* Glass Panels */
     .glass-panel {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(9, 14, 26, 0.90) 100%);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(9, 14, 26, 0.85) 100%);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 11px;
-        padding: 18px 22px;
+        border-radius: 10px;
+        padding: 18px 20px;
         margin-bottom: 18px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
 
-    /* Monogram Team Badges */
+    /* Team Badge Cards */
     .team-badge-card {
-        background: linear-gradient(145deg, rgba(15, 23, 42, 0.90) 0%, rgba(10, 16, 32, 0.98) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 32, 0.95) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        border-radius: 11px;
         padding: 22px 20px;
         text-align: center;
         position: relative;
-        transition: all 0.25s ease;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+        transition: all 0.22s ease;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
     }
     .team-badge-card:hover {
         transform: translateY(-3px);
         border-color: #00f2fe;
-        box-shadow: 0 10px 28px rgba(0, 242, 254, 0.15);
+        box-shadow: 0 8px 24px rgba(0, 242, 254, 0.12);
     }
     .team-avatar-ring {
-        width: 68px;
-        height: 68px;
+        width: 64px;
+        height: 64px;
         border-radius: 50%;
         background: linear-gradient(135deg, #0284c7, #00f2fe);
         padding: 2px;
@@ -232,7 +304,7 @@ st.markdown(
     .mono-avatar {
         font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 800 !important;
-        font-size: 1.35rem !important;
+        font-size: 1.3rem !important;
         letter-spacing: -0.5px !important;
         color: #00f2fe !important;
         background: #0b1120 !important;
@@ -252,29 +324,29 @@ st.markdown(
     }
     .team-role-pill {
         display: inline-block;
-        background: rgba(56, 189, 248, 0.12);
-        border: 1px solid rgba(56, 189, 248, 0.35);
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.3);
         color: #38bdf8;
-        font-size: 0.74rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        padding: 2px 9px;
+        padding: 2px 8px;
         border-radius: 20px;
-        margin-bottom: 11px;
+        margin-bottom: 10px;
         font-family: 'JetBrains Mono', monospace;
     }
     .team-bio {
-        font-size: 0.85rem;
+        font-size: 0.84rem;
         color: #94a3b8;
         line-height: 1.5;
         margin-bottom: 14px;
-        min-height: 48px;
+        min-height: 44px;
     }
     .team-skills {
         display: flex;
         flex-wrap: wrap;
         gap: 5px;
         justify-content: center;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
     .skill-chip {
         background: rgba(30, 41, 59, 0.7);
@@ -288,12 +360,12 @@ st.markdown(
     .btn-link {
         display: inline-block;
         background: rgba(15, 23, 42, 0.9);
-        border: 1px solid rgba(56, 189, 248, 0.3);
+        border: 1px solid rgba(56, 189, 248, 0.28);
         color: #f1f5f9 !important;
         text-decoration: none;
         padding: 5px 12px;
         border-radius: 6px;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         margin: 2px 3px;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
@@ -303,35 +375,34 @@ st.markdown(
         background: #0284c7;
         color: #ffffff !important;
         border-color: #00f2fe;
-        box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
     }
 
-    /* Primary Action Buttons in Main Canvas */
+    /* Primary Action Button */
     .main .stButton > button {
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
         color: #ffffff !important;
         font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 700 !important;
-        font-size: 0.98rem !important;
-        letter-spacing: 0.3px !important;
+        font-size: 0.96rem !important;
+        letter-spacing: 0.2px !important;
         border: 1px solid rgba(0, 242, 254, 0.4) !important;
         border-radius: 8px !important;
-        padding: 10px 24px !important;
-        transition: all 0.22s ease !important;
-        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
+        padding: 10px 22px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3) !important;
     }
     .main .stButton > button:hover {
         background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
         border-color: #00f2fe !important;
-        box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5) !important;
-        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 18px rgba(0, 242, 254, 0.45) !important;
+        transform: translateY(-1px) !important;
     }
 
-    /* Clean Tabs Styling */
+    /* Clean Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background-color: rgba(15, 23, 42, 0.5);
-        padding: 5px 6px;
+        padding: 4px 6px;
         border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.06);
     }
@@ -340,17 +411,17 @@ st.markdown(
         padding: 7px 16px;
         font-family: 'Space Grotesk', sans-serif;
         font-weight: 600;
-        font-size: 0.88rem;
+        font-size: 0.86rem;
         color: #94a3b8;
         border: none;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(14, 165, 233, 0.15) 100%) !important;
+        background: rgba(14, 165, 233, 0.15) !important;
         color: #00f2fe !important;
-        border: 1px solid rgba(56, 189, 248, 0.4) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
     }
 
-    /* Telemetry Info Pill Strip */
+    /* Telemetry Pill Strip */
     .pill-strip {
         display: flex;
         flex-wrap: wrap;
@@ -371,11 +442,11 @@ st.markdown(
     }
 
     /* =========================================================================
-       SIDEBAR: BALANCED BREATHING ROOM, LEFT-ALIGNED NAV & CLEAN RUNTIME SPECS
+       SIDEBAR: MODERN SLEEK NAV (LINEAR / VERCEL STYLE)
        ========================================================================= */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #040814 0%, #060b18 50%, #030712 100%) !important;
-        border-right: 1px solid rgba(56, 189, 248, 0.16) !important;
+        background: #030712 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
         padding-top: 0 !important;
     }
     
@@ -398,8 +469,8 @@ st.markdown(
     /* Position the open/close collapse button (<<) comfortably in the brand row */
     [data-testid="stSidebarCollapseButton"] {
         position: absolute !important;
-        top: 20px !important;
-        right: 14px !important;
+        top: 18px !important;
+        right: 12px !important;
         z-index: 999999 !important;
         margin: 0 !important;
         padding: 0 !important;
@@ -408,89 +479,79 @@ st.markdown(
     }
 
     [data-testid="stSidebarCollapseButton"] button {
-        background: rgba(15, 23, 42, 0.85) !important;
-        border: 1px solid rgba(56, 189, 248, 0.28) !important;
-        border-radius: 7px !important;
-        width: 28px !important;
-        height: 28px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        border: 1px solid rgba(56, 189, 248, 0.25) !important;
+        border-radius: 6px !important;
+        width: 26px !important;
+        height: 26px !important;
+        min-width: 26px !important;
+        min-height: 26px !important;
         padding: 0 !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         color: #94a3b8 !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
     }
 
     [data-testid="stSidebarCollapseButton"] button:hover {
         background: rgba(30, 41, 59, 1) !important;
         border-color: #00f2fe !important;
         color: #00f2fe !important;
-        box-shadow: 0 0 12px rgba(0, 242, 254, 0.4) !important;
-        transform: scale(1.05) !important;
     }
 
     [data-testid="stSidebarCollapseButton"] button svg {
         fill: currentColor !important;
         stroke: currentColor !important;
-        width: 15px !important;
-        height: 15px !important;
+        width: 14px !important;
+        height: 14px !important;
     }
 
     /* Expand sidebar button (>>) when collapsed */
     [data-testid="stSidebarCollapsedControl"] {
-        top: 14px !important;
-        left: 14px !important;
+        top: 12px !important;
+        left: 12px !important;
         z-index: 999999 !important;
     }
     [data-testid="stSidebarCollapsedControl"] button {
         background: rgba(15, 23, 42, 0.9) !important;
-        border: 1px solid rgba(56, 189, 248, 0.35) !important;
-        border-radius: 7px !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-radius: 6px !important;
         color: #00f2fe !important;
-        box-shadow: 0 0 14px rgba(0, 242, 254, 0.28) !important;
-        transition: all 0.2s ease !important;
-    }
-    [data-testid="stSidebarCollapsedControl"] button:hover {
-        background: rgba(30, 41, 59, 1) !important;
-        border-color: #00f2fe !important;
-        transform: scale(1.05) !important;
     }
 
-    /* Sidebar Content: comfortable, natural breathing room */
+    /* Sidebar Content: Clean, professional padding */
     section[data-testid="stSidebar"] .block-container {
-        padding-top: 20px !important;
+        padding-top: 18px !important;
         padding-bottom: 20px !important;
-        padding-left: 14px !important;
-        padding-right: 14px !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
     }
 
-    /* Brand Bar: natural spacing */
+    /* Brand Bar */
     .sidebar-brand-minimal {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 0 38px 0 2px;
+        padding: 0 34px 0 2px;
         margin-bottom: 4px;
-        height: 30px;
+        height: 28px;
     }
     .brand-left {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
     }
     .brand-dot {
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
         background: #00f2fe;
-        box-shadow: 0 0 10px #00f2fe;
+        box-shadow: 0 0 8px #00f2fe;
     }
     .brand-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 1.08rem;
+        font-size: 1.05rem;
         font-weight: 800;
         color: #f8fafc;
         letter-spacing: -0.2px;
@@ -500,20 +561,20 @@ st.markdown(
     }
     .brand-status-tag {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.64rem;
+        font-size: 0.62rem;
         font-weight: 700;
         color: #10b981;
         background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.35);
-        padding: 2px 7px;
-        border-radius: 12px;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 1px 6px;
+        border-radius: 10px;
         letter-spacing: 0.5px;
     }
     .sidebar-subtext {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.68rem;
+        font-size: 0.66rem;
         color: #64748b;
-        margin-top: 4px;
+        margin-top: 3px;
         margin-bottom: 12px;
         padding-left: 2px;
     }
@@ -521,7 +582,7 @@ st.markdown(
     /* Laser Divider */
     .sidebar-divider {
         height: 1px;
-        background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.25) 50%, transparent 100%);
+        background: rgba(255, 255, 255, 0.08);
         margin: 12px 0 14px 0;
         width: 100%;
     }
@@ -529,162 +590,179 @@ st.markdown(
     /* Section Label */
     .sidebar-section-label {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.68rem;
+        font-size: 0.66rem;
         font-weight: 700;
-        color: #38bdf8;
+        color: #64748b;
         letter-spacing: 1.3px;
         text-transform: uppercase;
-        margin-bottom: 8px;
-        padding-left: 2px;
+        margin-bottom: 6px;
+        padding-left: 6px;
     }
 
-    /* Navigation Buttons Container */
-    section[data-testid="stSidebar"] .stButton {
-        margin-bottom: 5px !important;
+    /* Sidebar Navigation Items: Sleek, Flat, Modern (Linear / Vercel style) */
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.stButton) {
+        margin-bottom: 2px !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
     }
-    section[data-testid="stSidebar"] .stButton > button {
-        width: 100% !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
-        padding: 9px 14px !important;
-        font-size: 0.85rem !important;
-        font-family: 'Space Grotesk', sans-serif !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.2px !important;
-        border-radius: 7px !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        min-height: 40px !important;
-        line-height: 1.3 !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-
-    section[data-testid="stSidebar"] .stButton > button div,
-    section[data-testid="stSidebar"] .stButton > button div p,
-    section[data-testid="stSidebar"] .stButton > button p {
-        text-align: left !important;
-        justify-content: flex-start !important;
-        display: flex !important;
-        align-items: center !important;
-        width: 100% !important;
+    section[data-testid="stSidebar"] div.stButton {
         margin: 0 !important;
+        padding: 0 !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button,
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {
+        width: 100% !important;
+        min-height: 38px !important;
+        height: 38px !important;
+        padding: 0 12px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        border-radius: 6px !important;
+        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
+        font-size: 0.84rem !important;
+        font-weight: 500 !important;
+        letter-spacing: -0.01em !important;
+        transition: all 0.15s ease !important;
+        border: 1px solid transparent !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
 
-    /* Inactive Nav Button */
+    /* Inactive Nav Item: Transparent, Unobtrusive */
+    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"],
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"],
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
-        background: rgba(15, 23, 42, 0.6) !important;
-        border: 1px solid rgba(255, 255, 255, 0.07) !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
         color: #94a3b8 !important;
         box-shadow: none !important;
     }
+    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"]:hover,
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
-        background: rgba(30, 41, 59, 0.85) !important;
-        border-color: rgba(56, 189, 248, 0.45) !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
         color: #f8fafc !important;
-        transform: translateX(4px) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+        transform: none !important;
     }
 
-    /* Active Nav Button */
+    /* Active Nav Item: Refined Accent */
+    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"],
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: linear-gradient(90deg, rgba(2, 132, 199, 0.35) 0%, rgba(14, 165, 233, 0.12) 100%) !important;
-        border: 1px solid #00f2fe !important;
-        border-left: 4px solid #00f2fe !important;
-        color: #00f2fe !important;
-        font-weight: 700 !important;
-        box-shadow: 0 0 16px rgba(0, 242, 254, 0.25) !important;
-        transform: translateX(2px) !important;
+        background: rgba(14, 165, 233, 0.12) !important;
+        border: 1px solid rgba(56, 189, 248, 0.22) !important;
+        border-left: 3px solid #00f2fe !important;
+        color: #38bdf8 !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+        transform: none !important;
     }
 
-    /* Clean, Spacious Runtime Specs Card */
+    /* Inner Button Elements */
+    section[data-testid="stSidebar"] .stButton > button div[data-testid="stMarkdownContainer"],
+    section[data-testid="stSidebar"] .stButton > button div,
+    section[data-testid="stSidebar"] .stButton > button div p,
+    section[data-testid="stSidebar"] .stButton > button p {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+
+    /* Clean Runtime Specs Card */
     .sidebar-specs-card {
-        background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 9px;
-        padding: 13px 14px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 12px 14px;
     }
     .specs-title {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.68rem;
+        font-size: 0.66rem;
         font-weight: 700;
         color: #38bdf8;
         letter-spacing: 1px;
         margin-bottom: 8px;
-        padding-bottom: 6px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        padding-bottom: 5px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         text-transform: uppercase;
     }
     .specs-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 5px 0;
-        font-size: 0.77rem;
+        padding: 4px 0;
+        font-size: 0.76rem;
         font-family: 'JetBrains Mono', monospace;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    }
-    .specs-row:last-child {
-        border-bottom: none;
-        padding-bottom: 2px;
     }
     .specs-label {
         color: #94a3b8;
-        font-size: 0.75rem;
+        font-size: 0.74rem;
     }
     .specs-val {
         color: #f1f5f9;
         font-weight: 600;
         background: rgba(30, 41, 59, 0.6);
-        padding: 2px 7px;
+        padding: 2px 6px;
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.06);
-        font-size: 0.73rem;
+        font-size: 0.72rem;
     }
     .specs-val.emerald {
         color: #10b981;
         background: rgba(16, 185, 129, 0.12);
-        border-color: rgba(16, 185, 129, 0.35);
+        border-color: rgba(16, 185, 129, 0.3);
     }
     .specs-val.cyan {
         color: #00f2fe;
         background: rgba(0, 242, 254, 0.12);
-        border-color: rgba(0, 242, 254, 0.35);
+        border-color: rgba(0, 242, 254, 0.3);
     }
 
     /* Minimal Footer */
     .sidebar-footer-minimal {
         padding: 10px 2px 2px 2px;
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         color: #64748b;
         text-align: center;
         font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Executive Callout Boxes */
+    /* Callout Cards */
     .callout-card {
-        background: rgba(15, 23, 42, 0.7);
-        border-radius: 9px;
-        padding: 15px 18px;
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 8px;
+        padding: 14px 16px;
         margin-bottom: 12px;
         border-left: 3px solid #0284c7;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
     .callout-success {
         border-left-color: #10b981;
-        background: rgba(16, 185, 129, 0.05);
+        background: rgba(16, 185, 129, 0.04);
     }
     .callout-warning {
         border-left-color: #f59e0b;
-        background: rgba(245, 158, 11, 0.05);
+        background: rgba(245, 158, 11, 0.04);
     }
     .callout-danger {
         border-left-color: #ef4444;
-        background: rgba(239, 68, 68, 0.05);
+        background: rgba(239, 68, 68, 0.04);
     }
     .callout-title {
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         font-weight: 700;
         margin-bottom: 4px;
         color: #f8fafc;
@@ -820,8 +898,48 @@ def load_benchmark_data() -> dict:
     return {}
 
 
+def render_page_header(
+    module_num: str,
+    eyebrow_suffix: str,
+    title: str,
+    subtitle: str,
+    badge_text: str = "SYSTEM ACTIVE",
+    mini_spec: str = "CUDA FP16",
+):
+    """Render a unified, senior-grade page top header across all modules."""
+    st.markdown(
+        f"""
+        <div class="page-top-bar">
+            <div class="page-breadcrumbs">
+                <span class="crumb-prefix">WIUT AI HACKATHON 2026</span>
+                <span class="crumb-sep">/</span>
+                <span class="crumb-module">MODULE {module_num}</span>
+                <span class="crumb-sep">/</span>
+                <span class="crumb-current">{eyebrow_suffix}</span>
+            </div>
+            <div class="page-header-row">
+                <div class="page-title-block">
+                    <h1 class="page-h1">{title}</h1>
+                    <p class="page-description">{subtitle}</p>
+                </div>
+                <div class="page-status-block">
+                    <div class="status-pill">
+                        <span class="pulse-indicator"></span>
+                        <span>{badge_text}</span>
+                    </div>
+                    <div class="spec-mini-pill">
+                        <span>{mini_spec}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ----------------------------------------------------------------------------
-# Sidebar Navigation (Minimalist, Zero-Scroll, 7 Rubric Sections)
+# Sidebar Navigation (Minimalist Linear / Vercel Style)
 # ----------------------------------------------------------------------------
 NAV_SECTIONS = [
     {"id": "Team", "num": "01", "title": "Engineering Squad"},
@@ -855,7 +973,7 @@ with st.sidebar:
 
     for item in NAV_SECTIONS:
         is_active = (st.session_state["selected_section"] == item["id"])
-        btn_label = f"{item['num']}  {item['title']}"
+        btn_label = f"{item['num']}   {item['title']}"
         if st.button(
             btn_label,
             key=f"nav_btn_{item['id']}",
@@ -903,20 +1021,13 @@ selected_section = st.session_state["selected_section"]
 # SECTION 1: TEAM
 # ============================================================================
 if selected_section == "Team":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 01 // PERSONNEL ROSTER</span>
-                <h1 class="hero-title">Engineering Squad</h1>
-                <p class="hero-subtitle">Westminster International University in Tashkent (WIUT) AI Hackathon 2026</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>ACTIVE SQUAD
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="01",
+        eyebrow_suffix="PERSONNEL ROSTER",
+        title="Engineering Squad",
+        subtitle="Westminster International University in Tashkent (WIUT) AI Hackathon 2026 • Computer Vision Track",
+        badge_text="ACTIVE SQUAD",
+        mini_spec="CUDA FP16",
     )
 
     t1, t2, t3 = st.columns(3)
@@ -1002,8 +1113,15 @@ if selected_section == "Team":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("### Core Architectural Disciplines")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">SYSTEM CAPABILITIES</div>
+            <h2 class="section-heading-h2">Core Architectural Disciplines</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(
@@ -1041,30 +1159,53 @@ if selected_section == "Team":
 # SECTION 2: PROBLEM AND APPROACH
 # ============================================================================
 elif selected_section == "Problem and Approach":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 02 // SYSTEM ARCHITECTURE</span>
-                <h1 class="hero-title">Problem Statement & Technical Approach</h1>
-                <p class="hero-subtitle">Hybrid AI Architecture: YOLO11 + 21-Zone Geometric Logic + Secondary YOLOv8x Anomaly Model</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>PIPELINE VERIFIED
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="02",
+        eyebrow_suffix="SYSTEM ARCHITECTURE",
+        title="Problem Statement & Technical Approach",
+        subtitle="Hybrid AI Architecture: YOLO11 + 21-Zone Geometric Logic + Secondary YOLOv8x Anomaly Model",
+        badge_text="PIPELINE VERIFIED",
+        mini_spec="3.0x BUDGET COMPLIANT",
     )
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(
+            '<div class="metric-card"><div class="metric-value">14 Classes</div>'
+            '<div class="metric-label">Target Taxonomy</div>'
+            '<div class="metric-sub">10 Spatial + 2 Anomaly</div></div>',
+            unsafe_allow_html=True,
+        )
+    with k2:
+        st.markdown(
+            '<div class="metric-card"><div class="metric-value">3.0x</div>'
+            '<div class="metric-label">Execution Budget</div>'
+            '<div class="metric-sub">Video duration limit</div></div>',
+            unsafe_allow_html=True,
+        )
+    with k3:
+        st.markdown(
+            '<div class="metric-card"><div class="metric-value">4K UHD</div>'
+            '<div class="metric-label">Input Resolution</div>'
+            '<div class="metric-sub">3840 x 2160 @ 29.97 FPS</div></div>',
+            unsafe_allow_html=True,
+        )
+    with k4:
+        st.markdown(
+            '<div class="metric-card"><div class="metric-value">Part B</div>'
+            '<div class="metric-label">Causal Risk P(t)</div>'
+            '<div class="metric-sub">Anti-Jitter Filtered</div></div>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown(
         """
-        <div class="glass-panel">
-            <div style="font-size: 1.02rem; font-weight: 600; color: #f8fafc; margin-bottom: 5px;">Challenge Definition</div>
-            <div style="color: #94a3b8; font-size: 0.9rem; line-height: 1.6;">
+        <div class="glass-panel" style="margin-top: 14px; margin-bottom: 20px;">
+            <div style="font-size: 0.98rem; font-weight: 700; color: #f8fafc; margin-bottom: 6px;">Challenge Definition & Constraints</div>
+            <div style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6;">
                 Fixed intersection surveillance cameras experience diverse hazard scenarios across fluctuating daylight and evening conditions. 
                 The system must detect <b>14 official event classes</b> (Part A) and output an <b>anticipatory causal risk score</b> P(t) in [0, 1] 
-                (Part B) operating strictly under a <b>3.0x video duration budget</b>.
+                (Part B) operating strictly under a <b>3.0x video duration budget</b> without future frame leakage.
             </div>
         </div>
         """,
@@ -1162,20 +1303,13 @@ elif selected_section == "Problem and Approach":
 # SECTION 3: EDA OF SAMPLE VIDEOS
 # ============================================================================
 elif selected_section == "EDA of sample videos":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 03 // DATASET INTELLIGENCE</span>
-                <h1 class="hero-title">Exploratory Data Analysis (EDA)</h1>
-                <p class="hero-subtitle">Comprehensive spatial, temporal, and resolution metrics across surveillance feeds.</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>DATASET AUDITED
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="03",
+        eyebrow_suffix="DATASET INTELLIGENCE",
+        title="Exploratory Data Analysis (EDA)",
+        subtitle="Comprehensive spatial, temporal, and resolution metrics across 4K intersection surveillance feeds.",
+        badge_text="DATASET AUDITED",
+        mini_spec="4 SURVEILLANCE FEEDS",
     )
 
     # High-Impact KPI Summary Strip
@@ -1209,8 +1343,15 @@ elif selected_section == "EDA of sample videos":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-    st.markdown("### Video Stream Metadata & Calibration Offsets")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">STREAM TELEMETRY</div>
+            <h2 class="section-heading-h2">Video Stream Metadata & Calibration Offsets</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     video_stats = pd.DataFrame({
         "Video ID": ["C3896.MP4", "C3897.MP4", "C3902.MP4", "C3905.MP4"],
         "Resolution": ["3840 x 2160 (4K)", "3840 x 2160 (4K)", "3840 x 2160 (4K)", "3840 x 2160 (4K)"],
@@ -1223,7 +1364,15 @@ elif selected_section == "EDA of sample videos":
     })
     st.dataframe(video_stats, use_container_width=True)
 
-    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">DISTRIBUTION PATTERNS</div>
+            <h2 class="section-heading-h2">Visual Analytics & Traffic Influx Dynamics</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("#### Road User Class Distribution")
@@ -1275,20 +1424,13 @@ elif selected_section == "EDA of sample videos":
 # SECTION 4: RESULTS ON SAMPLE VIDEOS
 # ============================================================================
 elif selected_section == "Results on sample videos":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 04 // BENCHMARK VERIFICATION</span>
-                <h1 class="hero-title">Official Benchmark Results</h1>
-                <p class="hero-subtitle">Validated using official evaluate.py on predictions_samples.json (All 4 feeds).</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>BENCHMARK VALIDATED
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="04",
+        eyebrow_suffix="BENCHMARK VERIFICATION",
+        title="Official Benchmark Results",
+        subtitle="Validated using official evaluate.py on predictions_samples.json (All 4 feeds).",
+        badge_text="BENCHMARK VALIDATED",
+        mini_spec="0 ERRORS • 0 BLIPS",
     )
 
     benchmark_data = load_benchmark_data()
@@ -1325,8 +1467,15 @@ elif selected_section == "Results on sample videos":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-    st.markdown("### Per-Video Benchmark Breakdown")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">EVALUATION METRICS</div>
+            <h2 class="section-heading-h2">Per-Video Benchmark Breakdown</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     benchmark_table = pd.DataFrame({
         "Video ID": ["C3896.MP4", "C3897.MP4", "C3902.MP4", "C3905.MP4"],
         "Duration": ["340.3 s", "317.8 s", "317.8 s", "127.6 s"],
@@ -1344,8 +1493,15 @@ elif selected_section == "Results on sample videos":
     })
     st.dataframe(benchmark_table, use_container_width=True)
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    st.markdown("### Interactive Feed Inspector")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">DEEP TELEMETRY</div>
+            <h2 class="section-heading-h2">Interactive Feed Inspector</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     feed_choice = st.selectbox(
         "Select Benchmark Video Feed to Inspect:",
@@ -1403,8 +1559,15 @@ elif selected_section == "Results on sample videos":
         else:
             st.info(f"Risk data not available for {feed_key}.")
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    st.markdown("### Honest Failure Cases & Edge Analyses")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">EDGE CASES</div>
+            <h2 class="section-heading-h2">Honest Failure Cases & Edge Analyses</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     fail_c1, fail_c2, fail_c3 = st.columns(3)
     with fail_c1:
         st.markdown(
@@ -1454,20 +1617,13 @@ elif selected_section == "Results on sample videos":
 # SECTION 5: LIVE DEMO (SMART CITY CONTROL ROOM INTERACTION)
 # ============================================================================
 elif selected_section == "Live Demo":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 05 // LIVE INFERENCE CONSOLE</span>
-                <h1 class="hero-title">Live Video Analytics & Risk Console</h1>
-                <p class="hero-subtitle">Upload custom surveillance feeds (up to 10GB) or choose pre-loaded feeds to run end-to-end inference.</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>ENGINE READY
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="05",
+        eyebrow_suffix="LIVE INFERENCE CONSOLE",
+        title="Live Video Analytics & Risk Console",
+        subtitle="Upload custom surveillance feeds (up to 10GB) or choose pre-loaded feeds to run end-to-end inference.",
+        badge_text="ENGINE READY",
+        mini_spec="REAL-TIME GPU INFERENCE",
     )
 
     demo_c1, demo_c2 = st.columns([1, 1])
@@ -1475,7 +1631,15 @@ elif selected_section == "Live Demo":
     display_name = ""
 
     with demo_c1:
-        st.markdown("#### 1. Source Selection")
+        st.markdown(
+            """
+            <div class="section-header-block" style="margin-top: 0;">
+                <div class="section-eyebrow">STEP 01 // INPUT FEED</div>
+                <h2 class="section-heading-h2">Source Selection & Calibration</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         input_choice = st.radio(
             "Choose Video Source:",
             ["Select Pre-loaded Benchmark Sample", "Upload Custom Surveillance Video (.mp4)"],
@@ -1550,7 +1714,15 @@ elif selected_section == "Live Demo":
                 )
 
     with demo_c2:
-        st.markdown("#### 2. Video Stream & Geometry Map")
+        st.markdown(
+            """
+            <div class="section-header-block" style="margin-top: 0;">
+                <div class="section-eyebrow">STEP 02 // STREAM PREVIEW</div>
+                <h2 class="section-heading-h2">Live Video & Spatial Geometry</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         if target_video_path is not None and Path(target_video_path).exists():
             preview_tabs = st.tabs(["Video Stream", "21-Zone Geometric Map"])
 
@@ -1571,8 +1743,15 @@ elif selected_section == "Live Demo":
         else:
             st.info("Upload an MP4 file or select a pre-loaded sample above to activate preview.")
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    st.markdown("#### 3. Execution Pipeline")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">STEP 03 // REAL-TIME INFERENCE</div>
+            <h2 class="section-heading-h2">Execution Engine Pipeline</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if target_video_path is not None:
         run_btn = st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
@@ -1679,8 +1858,15 @@ elif selected_section == "Live Demo":
         total_elapsed = st.session_state.get("cached_elapsed", 0.0)
         cached_name = st.session_state.get("cached_display_name", display_name)
 
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        st.markdown("### Live Surveillance Telemetry")
+        st.markdown(
+            """
+            <div class="section-header-block">
+                <div class="section-eyebrow">STEP 04 // RESULTS</div>
+                <h2 class="section-heading-h2">Live Surveillance Telemetry & Risk Analytics</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # KPI metric cards
         k1, k2, k3, k4 = st.columns(4)
@@ -1714,8 +1900,15 @@ elif selected_section == "Live Demo":
                 unsafe_allow_html=True,
             )
 
-        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
-        st.markdown("### Detected Traffic Violations & Events (Part A)")
+        st.markdown(
+            """
+            <div class="section-header-block">
+                <div class="section-eyebrow">PART A // DETECTIONS</div>
+                <h2 class="section-heading-h2">Detected Traffic Violations & Temporal Segments</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         if events:
             df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Violation Label"])
             df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(3)
@@ -1736,8 +1929,15 @@ elif selected_section == "Live Demo":
         else:
             st.info("No traffic violations or incidents detected in this stream.")
 
-        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
-        st.markdown("### Causal Accident Risk Curve with 0.50 Alarm Threshold (Part B)")
+        st.markdown(
+            """
+            <div class="section-header-block">
+                <div class="section-eyebrow">PART B // CAUSAL RISK</div>
+                <h2 class="section-heading-h2">Causal Accident Risk Curve P(t) [0.50 Alarm Threshold]</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         if risk_scores:
             df_risk = pd.DataFrame({
                 "Accident Risk P(t)": risk_scores,
@@ -1752,20 +1952,13 @@ elif selected_section == "Live Demo":
 # SECTION 6: REPORT
 # ============================================================================
 elif selected_section == "Report":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 06 // POST-MORTEM ANALYSIS</span>
-                <h1 class="hero-title">Executive Project Report</h1>
-                <p class="hero-subtitle">Comprehensive engineering debrief: What Worked, What Didn't, and What We Would Do Next.</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>EXECUTIVE BRIEFING
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="06",
+        eyebrow_suffix="POST-MORTEM ANALYSIS",
+        title="Executive Project Report",
+        subtitle="Comprehensive engineering debrief: What Worked, What Didn't, and What We Would Do Next.",
+        badge_text="EXECUTIVE BRIEFING",
+        mini_spec="PRODUCTION READY",
     )
 
     r_col1, r_col2, r_col3 = st.columns(3)
@@ -1834,20 +2027,13 @@ elif selected_section == "Report":
 # SECTION 7: LINKS (REQUIRED BY RUBRIC)
 # ============================================================================
 elif selected_section == "Links":
-    st.markdown(
-        """
-        <div class="control-center-banner">
-            <div class="hero-title-group">
-                <span class="section-eyebrow">MODULE 07 // SUBMISSION ARTIFACTS</span>
-                <h1 class="hero-title">Repository, Weights & Predictions</h1>
-                <p class="hero-subtitle">Official verified submission links conforming to Hackathon rubric Section 7.</p>
-            </div>
-            <div class="status-badge-live">
-                <span class="status-dot"></span>VERIFIED LINKS
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_page_header(
+        module_num="07",
+        eyebrow_suffix="SUBMISSION ARTIFACTS",
+        title="Repository, Weights & Predictions",
+        subtitle="Official verified submission links conforming strictly to Hackathon rubric Section 7.",
+        badge_text="VERIFIED LINKS",
+        mini_spec="SEED 42 LOCKED",
     )
 
     c1, c2, c3 = st.columns(3)
@@ -1910,8 +2096,15 @@ elif selected_section == "Links":
                     use_container_width=True,
                 )
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("#### predictions_samples.json Telemetry Summary")
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">EVALUATION ARTIFACTS</div>
+            <h2 class="section-heading-h2">predictions_samples.json Telemetry Summary</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     pred_p = Path("predictions_samples.json")
     if pred_p.exists():
         with open(pred_p, "r") as f:
