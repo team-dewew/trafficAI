@@ -9,4 +9,8 @@ if [ ! -f "$WEIGHTS_DIR/yolo11l.pt" ]; then
     curl -L -o "$WEIGHTS_DIR/yolo11l.pt" "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l.pt"
 fi
 
+if [ ! -f "$WEIGHTS_DIR/yolov8n.pt" ]; then
+    curl -L -o "$WEIGHTS_DIR/yolov8n.pt" "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"
+fi
+
 echo "Weights download completed."
