@@ -78,8 +78,8 @@ def render_annotated(
         cap.release()
         raise RuntimeError(f"cannot read first frame of {video_path}")
 
-    det_path = Path("weights/yolo11l.pt")
-    model = _load_yolo(str(det_path) if det_path.exists() else "yolo11l.pt")
+    from src.models import _load_yolo
+    model = _load_yolo("yolo11l.pt")
     dx, dy = get_ai_offset(first_frame, model)
     aligned = shift_scene_config(SCENE_CONFIG, dx, dy)
     tl_bbox = aligned["traffic_light_main_bbox"]

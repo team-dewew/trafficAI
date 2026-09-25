@@ -134,18 +134,7 @@ MIN_EVENT_DURATION: dict[str, float] = {
     "road_obstacle": 1.0,
 }
 
-# ----------------------------------------------------------------------------
-# Model cache: each weight file is loaded once per process, then reused
-# across videos (the harness processes a whole folder in one process).
-# ----------------------------------------------------------------------------
-_MODEL_CACHE: dict[str, YOLO] = {}
-
-
-def _load_yolo(weight_path: str) -> YOLO:
-    """Load (and memoize) a YOLO model so folders of videos don't reload weights."""
-    if weight_path not in _MODEL_CACHE:
-        _MODEL_CACHE[weight_path] = YOLO(weight_path)
-    return _MODEL_CACHE[weight_path]
+from src.models import _load_yolo
 
 
 def _open_event(active_events: dict, track_id: int, label: str, t_sec: float) -> None:
@@ -442,9 +431,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
         return []
 
     # 2. Initialize YOLO detector (YOLO11 Large) — cached across videos
-    local_weights = Path("weights/yolo11l.pt")
-    model_path = str(local_weights) if local_weights.exists() else "yolo11l.pt"
-    model = _load_yolo(model_path)
+    model = _load_yolo("yolo11l.pt")
 
     # 3. AI Auto-Alignment: detect traffic light displacement using YOLO
     dx, dy = get_ai_offset(first_frame, model)
@@ -460,8 +447,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
     ALIGNED_CONFIG = shift_scene_config(SCENE_CONFIG, dx, dy)
 
     # 4. External Anomaly Detection Model (accident, crash, fire, smoke) — cached
-    anomaly_weights = Path("weights/accident_model.pt")
-    anomaly_model = _load_yolo(str(anomaly_weights)) if anomaly_weights.exists() else None
+    anomaly_model = _load_yolo("accident_model.pt")
 
     # 5. Initialize Line Zones directly using ALIGNED_CONFIG
     stop_red_pts = ALIGNED_CONFIG["stop_line_red"]
@@ -961,9 +947,7 @@ class RiskEstimator:
                 "n_frames": int}
         """
         self.meta = meta
-        local_weights = Path("weights/yolov8n.pt")
-        model_path = str(local_weights) if local_weights.exists() else "yolov8n.pt"
-        self.model = _load_yolo(model_path)
+        self.model = _load_yolo("yolov8n.pt")
         self.tracker = sv.ByteTrack()
         self.frame_count = 0
         self.last_risk = 0.0
@@ -983,8 +967,7 @@ class RiskEstimator:
         h, w = frame.shape[:2]
         sx, sy = w / 3840.0, h / 2160.0
         try:
-            det_path = Path("weights/yolo11l.pt")
-            det_model = _load_yolo(str(det_path) if det_path.exists() else "yolo11l.pt")
+            det_model = _load_yolo("yolo11l.pt")
             dx, dy = get_ai_offset(frame, det_model)
         except Exception:
             dx, dy = 0, 0
