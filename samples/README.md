@@ -6,6 +6,6 @@ Ushbu papkaga `Videos.pdf` faylidagi 4 ta havola orqali yuklab olinadigan namuna
 - `10cHEReCWzO3u-Vk1CnNgHAx6egGy5MwJ`
 - `1aJ-QsAZVYJtLKHiRvKKeBq1D3GWNobRd`
 
-Shuningdek, sahna tavsifi (yo'l chiziqlari, yo'nalishlar, stop-chiziqlar) uchun `camera.md` faylini ham shu yerga joylashtiring.
-
 Eslatma: `.mp4` video fayllar katta hajmga ega bo'lgani sababli `.gitignore` ga qo'shilgan va GitHub ga yuklanmaydi.
+
+Qo'shimcha: `previews/` ichidagi annotatsiyalangan web-preview videolar `src/deep_eda.py` orqali avtomatik yaratiladi (`python src/deep_eda.py`). Sahna geometriyasi (21 zona) `solution.py` ichidagi `SCENE_CONFIG` da qo'lda kalibrlangan — tashkilotchilar `camera.md` taqdim etmasligini tasdiqlagan.

@@ -23,6 +23,8 @@ def main():
         "samples",
         "--out",
         "predictions_samples.json",
+        "--team",
+        "dewew",
     ]
     print(f"Executing: {' '.join(cmd_run)}", flush=True)
     

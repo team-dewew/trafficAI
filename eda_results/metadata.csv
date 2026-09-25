@@ -1,0 +1,5 @@
+video_name,width,height,resolution,fps,total_frames,duration_sec,first_frame_path,status
+C3896.MP4,3840,2160,3840x2160,29.97,10200,340.34,eda_results\frames\C3896_first_frame.jpg,success
+C3897.MP4,3840,2160,3840x2160,29.97,9525,317.817,eda_results\frames\C3897_first_frame.jpg,success
+C3902.MP4,3840,2160,3840x2160,29.97,9525,317.817,eda_results\frames\C3902_first_frame.jpg,success
+C3905.MP4,3840,2160,3840x2160,29.97,3825,127.627,eda_results\frames\C3905_first_frame.jpg,success

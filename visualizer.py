@@ -229,7 +229,8 @@ def main():
         cap.release()
         sys.exit(1)
 
-    dx, dy = get_ai_offset(first_frame, model_path=args.model)
+    from solution import _load_yolo
+    dx, dy = get_ai_offset(first_frame, _load_yolo(args.model))
     print(f"\033[1m[AI ALIGNMENT] Shifted by dx={dx:+d}, dy={dy:+d} using YOLO Traffic Light Detection\033[0m")
 
     # Rewind video capture back to frame 0

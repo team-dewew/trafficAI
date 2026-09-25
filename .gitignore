@@ -50,6 +50,9 @@ samples/*
 !samples/README.md
 !samples/*.md
 !samples/.gitkeep
+# Annotated web previews stay committed — the website's Results section needs them
+!samples/previews/
+!samples/previews/*.mp4
 
 # Large Model Weights (Keep weights/download.sh, but ignore weight files > 100MB)
 *.pt
@@ -71,7 +74,10 @@ weights/*.weights
 .vscode/
 .idea/
 
-# EDA Generated Output
-eda_results/*.csv
-eda_results/frames/*.jpg
-eda_results/frames/*.png
+# EDA Generated Output — artifacts are committed on purpose: the website's
+# EDA section reads them (metadata.csv, *_counts.csv, *_density.csv,
+# *_heatmap.png, *_trajectories.png, class_distribution.csv).
+# Only throwaway scratch output stays ignored:
+scratch/
+demo_clips/
+temp_*.mp4

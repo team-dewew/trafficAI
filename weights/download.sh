@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Download model weights before the offline evaluation run (max 5 GB)
+# Download model weights before the offline evaluation run (max 5 GB total).
+# Sources:
+#   yolo11l.pt        Ultralytics official release (AGPL-3.0)
+#   yolov8n.pt        Ultralytics official release (AGPL-3.0)
+#   accident_model.pt Enos-123/accident-evaluator-yolov8x (Hugging Face, weights/epoch90.pt)
 set -e
 
 WEIGHTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,6 +15,12 @@ fi
 
 if [ ! -f "$WEIGHTS_DIR/yolov8n.pt" ]; then
     curl -L -o "$WEIGHTS_DIR/yolov8n.pt" "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"
+fi
+
+# Secondary anomaly detector (accident / fire / smoke), fine-tuned YOLOv8x.
+# Downloaded as epoch90.pt and stored under the name the pipeline expects.
+if [ ! -f "$WEIGHTS_DIR/accident_model.pt" ]; then
+    curl -L -o "$WEIGHTS_DIR/accident_model.pt" "https://huggingface.co/Enos-123/accident-evaluator-yolov8x/resolve/main/weights/epoch90.pt"
 fi
 
 echo "Weights download completed."
