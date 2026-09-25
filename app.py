@@ -302,8 +302,8 @@ st.markdown(
         box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
     }
 
-    /* Primary Execution Button */
-    .stButton > button {
+    /* Primary Execution Button for Main Canvas */
+    .main .stButton > button {
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
         color: #ffffff !important;
         font-family: 'Space Grotesk', sans-serif !important;
@@ -316,7 +316,7 @@ st.markdown(
         transition: all 0.22s ease !important;
         box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35) !important;
     }
-    .stButton > button:hover {
+    .main .stButton > button:hover {
         background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
         border-color: #00f2fe !important;
         box-shadow: 0 6px 24px rgba(0, 242, 254, 0.5) !important;
@@ -365,14 +365,197 @@ st.markdown(
         color: #38bdf8;
     }
 
-    /* Sidebar Refinement */
+    /* =========================================================================
+       SIDEBAR CONTROL CENTER NAVIGATION (ZERO RADIO CIRCLES)
+       ========================================================================= */
     section[data-testid="stSidebar"] {
-        background-color: #060b16;
-        border-right: 1px solid rgba(56, 189, 248, 0.15);
+        background: linear-gradient(180deg, #050a17 0%, #070e20 50%, #030712 100%) !important;
+        border-right: 1px solid rgba(56, 189, 248, 0.16) !important;
+        padding-top: 1.2rem !important;
     }
-    section[data-testid="stSidebar"] .stRadio label {
+
+    /* Custom Laser Divider */
+    .sidebar-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.25) 50%, transparent 100%);
+        margin: 16px 0;
+        width: 100%;
+    }
+
+    /* Section Eyebrow Label */
+    .sidebar-section-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Sidebar Header Brand Card */
+    .sidebar-brand-card {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 30, 0.98) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 12px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    .brand-icon-box {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(56, 189, 248, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    .brand-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #f8fafc;
+        line-height: 1.1;
+        letter-spacing: -0.3px;
+    }
+    .brand-sub {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 0.6px;
+    }
+    .sidebar-tagline {
+        font-size: 0.76rem;
+        color: #94a3b8;
+        margin-top: 8px;
+        margin-bottom: 2px;
+        padding-left: 2px;
         font-family: 'Plus Jakarta Sans', sans-serif;
-        font-weight: 500;
+    }
+
+    /* Navigation Buttons Container */
+    section[data-testid="stSidebar"] .stButton {
+        margin-bottom: 6px !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button {
+        width: 100% !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        padding: 11px 14px !important;
+        font-size: 0.86rem !important;
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.2px !important;
+        border-radius: 9px !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    /* Inactive Nav Button (kind=secondary) */
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"],
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
+        background: rgba(15, 23, 42, 0.65) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #94a3b8 !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(56, 189, 248, 0.45) !important;
+        color: #f8fafc !important;
+        transform: translateX(4px) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    /* Active Nav Button (kind=primary) */
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: linear-gradient(90deg, rgba(2, 132, 199, 0.35) 0%, rgba(14, 165, 233, 0.12) 100%) !important;
+        border: 1px solid #00f2fe !important;
+        border-left: 4px solid #00f2fe !important;
+        color: #00f2fe !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 16px rgba(0, 242, 254, 0.25) !important;
+        transform: translateX(2px) !important;
+    }
+
+    /* Hardware Telemetry Card */
+    .sidebar-telemetry-card {
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 11px;
+        padding: 13px 14px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    .telemetry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 0.8px;
+        margin-bottom: 9px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .telemetry-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .telemetry-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.78rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .telemetry-k {
+        color: #94a3b8;
+    }
+    .telemetry-v {
+        color: #f1f5f9;
+        font-weight: 600;
+        background: rgba(30, 41, 59, 0.6);
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 0.74rem;
+    }
+    .telemetry-v.emerald {
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.35);
+        background: rgba(16, 185, 129, 0.12);
+    }
+    .telemetry-v.cyan {
+        color: #00f2fe;
+        border-color: rgba(0, 242, 254, 0.35);
+        background: rgba(0, 242, 254, 0.12);
+    }
+
+    /* Sidebar Footer */
+    .sidebar-footer {
+        padding: 10px 4px 2px 4px;
+        text-align: center;
+    }
+    .sidebar-footer-text {
+        font-size: 0.73rem;
+        color: #64748b;
+        line-height: 1.4;
+        font-family: 'JetBrains Mono', monospace;
     }
 
     /* Executive Callout Boxes */
@@ -537,53 +720,96 @@ def load_benchmark_data() -> dict:
 # ----------------------------------------------------------------------------
 # Sidebar Navigation (EXACT 7 SECTIONS AS REQUIRED BY RUBRIC)
 # ----------------------------------------------------------------------------
-SECTIONS = [
-    "Team",
-    "Problem and Approach",
-    "EDA of sample videos",
-    "Results on sample videos",
-    "Live Demo",
-    "Report",
-    "Links",
+NAV_SECTIONS = [
+    {"id": "Team", "num": "01", "icon": "👥", "title": "Engineering Squad"},
+    {"id": "Problem and Approach", "num": "02", "icon": "🏗️", "title": "Problem & Approach"},
+    {"id": "EDA of sample videos", "num": "03", "icon": "📊", "title": "EDA of Sample Videos"},
+    {"id": "Results on sample videos", "num": "04", "icon": "🏆", "title": "Benchmark Results"},
+    {"id": "Live Demo", "num": "05", "icon": "⚡", "title": "Live Demo Console"},
+    {"id": "Report", "num": "06", "icon": "📄", "title": "Executive Report"},
+    {"id": "Links", "num": "07", "icon": "🔗", "title": "Repository & Weights"},
 ]
+
+if "selected_section" not in st.session_state:
+    st.session_state["selected_section"] = "Live Demo"
 
 with st.sidebar:
     st.markdown(
         """
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <div style="font-size: 1.8rem;">🚦</div>
-            <div>
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; line-height: 1.1;">TRAFFIC AI</div>
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #38bdf8; letter-spacing: 0.5px;">CONTROL CONSOLE</div>
+        <div class="sidebar-brand-card">
+            <div class="brand-icon-box">🚦</div>
+            <div style="flex: 1;">
+                <div class="brand-title">TRAFFIC AI</div>
+                <div class="brand-sub">CONTROL CONSOLE</div>
+            </div>
+            <div class="status-badge-live" style="padding: 3px 8px; font-size: 0.68rem;">
+                <span class="status-dot"></span>SYS LIVE
             </div>
         </div>
+        <div class="sidebar-tagline">WIUT AI Hackathon 2026 • Computer Vision Track</div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section-label">SYSTEM NAVIGATION</div>
         """,
         unsafe_allow_html=True,
     )
-    st.caption("WIUT AI Hackathon 2026 • Computer Vision Track")
-    st.divider()
 
-    selected_section = st.radio("Navigation Console", SECTIONS, index=4)
+    for item in NAV_SECTIONS:
+        is_active = (st.session_state["selected_section"] == item["id"])
+        btn_label = f"{item['icon']}  {item['num']} // {item['title']}"
+        if st.button(
+            btn_label,
+            key=f"nav_btn_{item['id']}",
+            use_container_width=True,
+            type="primary" if is_active else "secondary",
+        ):
+            st.session_state["selected_section"] = item["id"]
+            st.rerun()
 
-    st.divider()
     st.markdown(
         """
-        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; font-size: 0.82rem; font-family: 'JetBrains Mono', monospace;">
-            <div style="color: #38bdf8; font-weight: 700; margin-bottom: 6px;">⚡ SYSTEM TELEMETRY</div>
-            <div style="color: #94a3b8; line-height: 1.6;">
-                • Primary: <span style="color:#f8fafc;">YOLO11 Large</span><br>
-                • Anomaly: <span style="color:#f8fafc;">YOLOv8x Crash/Fire</span><br>
-                • Tracker: <span style="color:#f8fafc;">ByteTrack Causal</span><br>
-                • GPU HW: <span style="color:#10b981;">NVIDIA RTX 3050</span><br>
-                • Seed Lock: <span style="color:#f8fafc;">42 (Deterministic)</span><br>
-                • Max Upload: <span style="color:#f8fafc;">10 GB Enabled</span>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-telemetry-card">
+            <div class="telemetry-header">
+                <span>⚡ HARDWARE TELEMETRY</span>
+                <span class="status-dot"></span>
+            </div>
+            <div class="telemetry-grid">
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Primary:</span>
+                    <span class="telemetry-v">YOLO11 Large</span>
+                </div>
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Anomaly:</span>
+                    <span class="telemetry-v">YOLOv8x Crash</span>
+                </div>
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Tracker:</span>
+                    <span class="telemetry-v">ByteTrack Causal</span>
+                </div>
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Inference:</span>
+                    <span class="telemetry-v emerald">RTX 3050 GPU</span>
+                </div>
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Seed Lock:</span>
+                    <span class="telemetry-v cyan">42 (Deterministic)</span>
+                </div>
+                <div class="telemetry-row">
+                    <span class="telemetry-k">Max Upload:</span>
+                    <span class="telemetry-v">10 GB Enabled</span>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-footer-text">
+                Automated Incident Detection & Causal Anticipation Engine
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.divider()
-    st.caption("Automated Traffic Event Detection & Causal Accident Anticipation Engine.")
+
+selected_section = st.session_state["selected_section"]
 
 
 # ============================================================================
