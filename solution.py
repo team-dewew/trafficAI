@@ -319,7 +319,7 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
         if e > s:
             by_class.setdefault(label, []).append([s, e])
 
-    merged_out: list[list] = []
+    merged_events: list[list] = []
     for label, intervals in by_class.items():
         # 2. Sort by start_sec
         intervals.sort(key=lambda x: x[0])
@@ -333,14 +333,19 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
             else:
                 merged.append(cur)
 
-        # 4. Drop Blips: strictly discard any event where (end_sec - start_sec) < 0.5 seconds
         for s, e in merged:
-            if (e - s) >= 0.5:
-                merged_out.append([round(s, 3), round(e, 3), label])
+            merged_events.append([round(s, 3), round(e, 3), label])
+
+    # 4. BRUTAL PART A FILTERING: STRICTLY drop anything under 0.5 seconds
+    final_events = []
+    for e in merged_events:
+        duration = e[1] - e[0]
+        if duration >= 0.5:  # STRICTLY drop anything under 0.5 seconds
+            final_events.append(e)
 
     # Final sort across all merged events by start_sec, then end_sec
-    merged_out.sort(key=lambda x: (x[0], x[1]))
-    return merged_out
+    final_events.sort(key=lambda x: (x[0], x[1]))
+    return final_events
 
 
 
@@ -1007,12 +1012,12 @@ class RiskEstimator:
                     dist = np.hypot(cx_i - cx_j, cy_i - cy_j)
                     iou = self._compute_iou(box_i, box_j)
 
-                    if dist < 50.0 or iou > 0.5:
-                        # CRITICAL CHECK: Check their speeds. If BOTH vehicles are moving at < 5.0 pixels/frame (i.e., a traffic jam), ignore them (risk remains low).
-                        if spd_i < 5.0 and spd_j < 5.0:
+                    if dist < 40.0 or iou > 0.5:
+                        # If they are close but both speeds are < 25.0 (which includes jittering stopped cars), ignore them (risk = 0.0)
+                        if spd_i < 25.0 and spd_j < 25.0:
                             continue
-                        # If AT LEAST ONE vehicle is moving fast (> 15.0 pixels/frame) while being extremely close, set current_risk = max(current_risk, 0.85) (Impending crash).
-                        if spd_i > 15.0 or spd_j > 15.0:
+                        # Only trigger the 0.85 collision risk IF: Distance < 40 px (or collision overlap) AND AT LEAST ONE vehicle has speed > 25.0
+                        if spd_i > 25.0 or spd_j > 25.0:
                             current_risk = max(current_risk, 0.85)
 
         # Periodic cleanup of stale tracks (> 60 frames inactive)
@@ -1022,7 +1027,7 @@ class RiskEstimator:
                 self.track_history.pop(tid, None)
                 self.track_frames.pop(tid, None)
 
-        # Smoothing & Decay: Use a strong decay so the risk naturally falls back to 0 when the hazard passes:
-        # self.last_risk = (self.last_risk * 0.85) + (current_risk * 0.15)
-        self.last_risk = (self.last_risk * 0.85) + (current_risk * 0.15)
+        # Apply a heavier exponential decay to pull the graph down faster when a hazard ends:
+        # self.last_risk = (self.last_risk * 0.60) + (current_risk * 0.40)
+        self.last_risk = (self.last_risk * 0.60) + (current_risk * 0.40)
         return float(np.clip(self.last_risk, 0.0, 1.0))
