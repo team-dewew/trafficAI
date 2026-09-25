@@ -22,23 +22,16 @@ import argparse
 import json
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import cv2
 import numpy as np
 import supervision as sv
 
-# Allow running both as `python src/annotate.py` and `python -m src.annotate`.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from solution import (  # noqa: E402
-    COCO_ROAD_USERS,
-    SCENE_CONFIG,
-    _load_yolo,
-    get_ai_offset,
-    get_traffic_light_state,
-    shift_scene_config,
-)
-from visualizer import build_scene_zones  # noqa: E402
+from src.models import _load_yolo
+from src.scene import build_scene
+from src.traffic_light import TrafficLightDetector
+from solution import COCO_ROAD_USERS
 
 
 def _active_labels(events: list[list] | None, t_sec: float) -> list[str]:
@@ -78,12 +71,29 @@ def render_annotated(
         cap.release()
         raise RuntimeError(f"cannot read first frame of {video_path}")
 
-    from src.models import _load_yolo
-    model = _load_yolo("yolo11l.pt")
-    dx, dy = get_ai_offset(first_frame, model)
-    aligned = shift_scene_config(SCENE_CONFIG, dx, dy)
-    tl_bbox = aligned["traffic_light_main_bbox"]
-    zones = build_scene_zones(aligned)
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # We disabled AI alignment, so dx=dy=0 for now.
+    dx, dy = 0, 0
+    zones = build_scene(W, H, dx, dy)
+    tl_bbox = zones["raw"]["main_signal"]
+    tl_detector = TrafficLightDetector()
+    
+    # Create Annotators inline
+    zones["line_annotator_strict"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=0, b=0))
+    zones["line_annotator_tol"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=165, b=0))
+    zones["line_annotator_yield"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=255, b=0))
+    
+    zones["crosswalk_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=0, g=255, b=0), thickness=3) for z in zones["crosswalks"]]
+    zones["island_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=128, g=0, b=128), thickness=3) for z in zones["ped_refuge"] + zones["barriers"]]
+    zones["sidewalk_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=0, g=255, b=255), thickness=2) for z in zones["sidewalks"]]
+    
+    road_labels = ["Lane LTR", "Lane RTL", "Intersection", "Right Turn", "Lower Core"]
+    zones["road_annotators"] = [
+        (sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=200, g=200, b=200), thickness=2), lbl)
+        for z, lbl in zip(zones["road_zones"], road_labels)
+    ]
 
     start_frame = max(0, int(start_sec * fps))
     stop_frame = total_frames - 1 if end_sec is None else min(total_frames - 1, int(end_sec * fps))
@@ -112,7 +122,7 @@ def render_annotated(
             continue
 
         t_sec = frame_idx / fps
-        tl_state = get_traffic_light_state(frame, tl_bbox)
+        tl_state = tl_detector.get_state(frame, tl_bbox)
 
         results = model(frame, verbose=False, classes=list(COCO_ROAD_USERS.keys()), imgsz=640)[0]
         detections = sv.Detections.from_ultralytics(results)
@@ -121,8 +131,8 @@ def render_annotated(
         if frame_sink is not None:
             frame_sink(frame_idx, t_sec, frame, tracked)
 
-        zones["stop_line_red"].trigger(tracked)
-        zones["stop_line_jam"].trigger(tracked)
+        zones["stop_line_strict"].trigger(tracked)
+        zones["stop_line_tolerance"].trigger(tracked)
         zones["yield_ped_line"].trigger(tracked)
 
         ann = frame.copy()
@@ -134,8 +144,8 @@ def render_annotated(
             ann = isl_annotator.annotate(scene=ann, label="Island")
         for sw_annotator in zones["sidewalk_annotators"]:
             ann = sw_annotator.annotate(scene=ann, label="Sidewalk")
-        ann = zones["line_annotator_red"].annotate(frame=ann, line_counter=zones["stop_line_red"])
-        ann = zones["line_annotator_jam"].annotate(frame=ann, line_counter=zones["stop_line_jam"])
+        ann = zones["line_annotator_strict"].annotate(frame=ann, line_counter=zones["stop_line_strict"])
+        ann = zones["line_annotator_tol"].annotate(frame=ann, line_counter=zones["stop_line_tolerance"])
         ann = zones["line_annotator_yield"].annotate(frame=ann, line_counter=zones["yield_ped_line"])
 
         x1, y1, x2, y2 = [int(v) for v in tl_bbox]
