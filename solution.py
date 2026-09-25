@@ -86,34 +86,30 @@ TARGET_COCO_CLASSES = {**COCO_ROAD_USERS, **COCO_OBSTACLES}
 VEHICLE_CLASSES = {"car", "bus", "truck", "motorcycle"}
 OBSTACLE_CLASSES = set(COCO_OBSTACLES.values())
 
-# Minimum durations (seconds) before an event of each class may be emitted
-MIN_EVENT_DURATION: dict[str, float] = {
-    "stopped_vehicle": 10.0,
-    "road_obstacle": 1.0,
-}
-
 from src.models import _load_yolo
+from src.tracking import make_tracker
+from src.config import RULES
 
 
-def _open_event(active_events: dict, track_id: int, label: str, t_sec: float) -> None:
+def _open_event(active_events: dict, emitted: set, track_id: int, label: str, t_sec: float) -> None:
     """Idempotently mark an event as active for (track_id, label)."""
     key = (track_id, label)
-    if key in active_events.get("_emitted", set()):
+    if key in emitted:
         return
     if key not in active_events:
         active_events[key] = {"label": label, "start_sec": t_sec}
 
 
-def _close_event(active_events: dict, events: list, track_id: int, label: str, end_sec: float) -> None:
+def _close_event(active_events: dict, events: list, emitted: set, track_id: int, label: str, end_sec: float) -> None:
     """Close an active per-track event and emit it if it meets its min duration."""
     info = active_events.pop((track_id, label), None)
     if info is None:
         return
     start = info["start_sec"]
-    if end_sec > start and (end_sec - start) >= MIN_EVENT_DURATION.get(label, 0.0):
+    min_dur = RULES.get(label, {}).get("min_duration", 0.0)
+    if end_sec > start and (end_sec - start) >= min_dur:
         events.append([round(start, 3), round(end_sec, 3), label])
-        if "_emitted" in active_events:
-            active_events["_emitted"].add((track_id, label))
+        emitted.add((track_id, label))
 
 
 from src.traffic_light import TrafficLightDetector
@@ -329,7 +325,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
 
     # 6. Initialize Multi-Object Tracker (ByteTrack)
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
-    tracker = sv.ByteTrack(track_thresh=0.25, track_buffer=int(fps * 4))
+    tracker = make_tracker(fps)
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
@@ -342,7 +338,9 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
     track_history: dict[int, list[tuple[float, float, float]]] = {}
     last_seen_time: dict[int, float] = {}
 
-    active_events: dict = {"_emitted": set()}
+    # active_events[(track_id, label)] = {"label": str, "start_sec": float}
+    active_events: dict[tuple[int, str], dict] = {}
+    emitted_events: set[tuple[int, str]] = set()
     # active_nm[(id_a, id_b)] = {"start": float, "last": float} — near-miss pairs
     active_nm: dict[tuple[int, int], dict] = {}
     global_events: dict[str, dict] = {}  # for zone-wide congestion tracking
@@ -516,9 +514,9 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             if class_name == "pedestrian":
                 is_jaywalking = in_any_road[i] and not in_any_crosswalk[i] and not in_any_sidewalk[i]
                 if is_jaywalking:
-                    _open_event(active_events, track_id, "jaywalking", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "jaywalking", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "jaywalking", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "jaywalking", t_sec)
 
             # -------------------------------------------------------------
             # 2. Logic for RED LIGHT & STOP LINE:
@@ -531,19 +529,19 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                         events.append([round(t_sec, 3), round(t_sec + 2.0, 3), "red_light"])
 
                 # Stop line violation: stopped past stop_line_red but before jam line / core on RED
-                is_past_red_line = crossed_red_line_map.get(track_id, False)
-                is_in_intersection = in_intersection_core[i] or crossed_jam_line_map.get(track_id, False)
+                past_tolerance = crossed_jam_line_map.get(track_id, False)
+                speed_thresh = RULES.get("stop_line", {}).get("speed_rel_thresh", 0.05) * diag
                 is_stopped_on_red = (
-                    is_past_red_line
-                    and not is_in_intersection
-                    and speed < 10.0
+                    past_tolerance
+                    and not in_intersection_core[i]
+                    and speed < speed_thresh
                     and tl_main_state == "RED"
                 )
 
                 if is_stopped_on_red:
-                    _open_event(active_events, track_id, "stop_line", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "stop_line", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "stop_line", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "stop_line", t_sec)
 
             # -------------------------------------------------------------
             # 3. Logic for FAILURE TO YIELD:
@@ -554,9 +552,9 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                 is_failing_yield = vehicle_in_conflict_zone and pedestrian_on_crosswalk
 
                 if is_failing_yield:
-                    _open_event(active_events, track_id, "failure_to_yield", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "failure_to_yield", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "failure_to_yield", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "failure_to_yield", t_sec)
 
             # -------------------------------------------------------------
             # 4. Logic for SOLID LINE CROSSING (Concrete islands / dividers):
@@ -564,9 +562,9 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             # -------------------------------------------------------------
             if class_name in VEHICLE_CLASSES:
                 if in_any_island[i]:
-                    _open_event(active_events, track_id, "solid_line_crossing", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "solid_line_crossing", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "solid_line_crossing", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "solid_line_crossing", t_sec)
 
             # -------------------------------------------------------------
             # 5. Logic for WRONG WAY:
@@ -575,27 +573,29 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             # -------------------------------------------------------------
             if class_name in VEHICLE_CLASSES:
                 is_wrong_way = False
-                if in_lane_ltr[i] and mv_dx < -30.0:
+                dx_thresh = RULES.get("wrong_way", {}).get("dx_rel_thresh", 0.3) * diag
+                if in_lane_ltr[i] and mv_dx < -dx_thresh:
                     is_wrong_way = True
-                elif in_lane_rtl[i] and mv_dx > 30.0:
+                elif in_lane_rtl[i] and mv_dx > dx_thresh:
                     is_wrong_way = True
 
                 if is_wrong_way:
-                    _open_event(active_events, track_id, "wrong_way", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "wrong_way", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "wrong_way", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "wrong_way", t_sec)
 
             # -------------------------------------------------------------
             # 6. Logic for STOPPED VEHICLE:
             # Stationary (speed < 10 px/s) on carriageway for >= 10.0 seconds
             # -------------------------------------------------------------
             if class_name in VEHICLE_CLASSES:
-                is_stopped = in_any_road[i] and (speed < 10.0)
+                speed_thresh = RULES.get("stopped_vehicle", {}).get("speed_rel_thresh", 0.05) * diag
+                is_stopped = in_any_road[i] and (speed < speed_thresh)
 
                 if is_stopped:
-                    _open_event(active_events, track_id, "stopped_vehicle", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "stopped_vehicle", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "stopped_vehicle", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "stopped_vehicle", t_sec)
 
             # -------------------------------------------------------------
             # 7. Logic for ROAD OBSTACLE:
@@ -603,12 +603,13 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             # -------------------------------------------------------------
             if class_name in OBSTACLE_CLASSES:
                 obs_speed = speed if speed != float("inf") else 0.0
-                is_obstacle = in_any_road[i] and (obs_speed < 5.0)
+                speed_thresh = RULES.get("road_obstacle", {}).get("speed_rel_thresh", 0.05) * diag
+                is_obstacle = in_any_road[i] and (obs_speed < speed_thresh)
 
                 if is_obstacle:
-                    _open_event(active_events, track_id, "road_obstacle", t_sec)
+                    _open_event(active_events, emitted_events, track_id, "road_obstacle", t_sec)
                 else:
-                    _close_event(active_events, events, track_id, "road_obstacle", t_sec)
+                    _close_event(active_events, events, emitted_events, track_id, "road_obstacle", t_sec)
 
             # -------------------------------------------------------------
             # 8. Logic for ILLEGAL U-TURN:
@@ -619,11 +620,17 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                     p_3s = get_history_point(track_history[track_id], dt_ago=3.0)
                     p_1_5s = get_history_point(track_history[track_id], dt_ago=1.5)
                     if p_3s is not None and p_1_5s is not None:
-                        dx_prev = p_1_5s[0] - p_3s[0]
-                        dx_curr = cx - p_1_5s[0]
-                        if (dx_prev > 30.0 and dx_curr < -30.0) or (dx_prev < -30.0 and dx_curr > 30.0):
-                            u_turn_set.add(track_id)
-                            events.append([round(max(0.0, t_sec - 1.5), 3), round(t_sec + 1.5, 3), "illegal_u_turn"])
+                        vec1 = np.array([p_1_5s[0] - p_3s[0], p_1_5s[1] - p_3s[1]])
+                        vec2 = np.array([cx - p_1_5s[0], cy - p_1_5s[1]])
+                        norm1 = np.linalg.norm(vec1)
+                        norm2 = np.linalg.norm(vec2)
+                        
+                        if norm1 > 0.5 * diag and norm2 > 0.5 * diag:
+                            cos_theta = np.dot(vec1, vec2) / (norm1 * norm2)
+                            if cos_theta < -0.76:
+                                u_turn_set.add(track_id)
+                                _open_event(active_events, emitted_events, track_id, "illegal_u_turn", t_sec - 3.0)
+                                _close_event(active_events, events, emitted_events, track_id, "illegal_u_turn", t_sec)
 
             # -------------------------------------------------------------
             # 9. Logic for ILLEGAL TURN:
@@ -653,10 +660,13 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             i for i in range(num_dets)
             if in_lane_ltr[i] and TARGET_COCO_CLASSES.get(int(tracked_detections.class_id[i]), "") in VEHICLE_CLASSES
         ]
-        if len(veh_ltr) >= 4:
+        min_v = RULES.get("congestion", {}).get("min_vehicles", 4)
+        if len(veh_ltr) >= min_v:
             valid_speeds_ltr = [det_speeds[i] for i in veh_ltr if det_speeds.get(i, float("inf")) != float("inf")]
+            valid_diags_ltr = [float(np.hypot(tracked_detections.xyxy[i][2] - tracked_detections.xyxy[i][0], tracked_detections.xyxy[i][3] - tracked_detections.xyxy[i][1])) for i in veh_ltr if det_speeds.get(i, float("inf")) != float("inf")]
             avg_speed_ltr = (sum(valid_speeds_ltr) / len(valid_speeds_ltr)) if valid_speeds_ltr else 0.0
-            is_cong_ltr = avg_speed_ltr < 5.0
+            avg_diag_ltr = (sum(valid_diags_ltr) / len(valid_diags_ltr)) if valid_diags_ltr else 100.0
+            is_cong_ltr = avg_speed_ltr < RULES.get("congestion", {}).get("speed_rel_thresh", 0.05) * avg_diag_ltr
         else:
             is_cong_ltr = False
 
@@ -675,10 +685,12 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
             i for i in range(num_dets)
             if in_lane_rtl[i] and TARGET_COCO_CLASSES.get(int(tracked_detections.class_id[i]), "") in VEHICLE_CLASSES
         ]
-        if len(veh_rtl) >= 4:
+        if len(veh_rtl) >= min_v:
             valid_speeds_rtl = [det_speeds[i] for i in veh_rtl if det_speeds.get(i, float("inf")) != float("inf")]
+            valid_diags_rtl = [float(np.hypot(tracked_detections.xyxy[i][2] - tracked_detections.xyxy[i][0], tracked_detections.xyxy[i][3] - tracked_detections.xyxy[i][1])) for i in veh_rtl if det_speeds.get(i, float("inf")) != float("inf")]
             avg_speed_rtl = (sum(valid_speeds_rtl) / len(valid_speeds_rtl)) if valid_speeds_rtl else 0.0
-            is_cong_rtl = avg_speed_rtl < 5.0
+            avg_diag_rtl = (sum(valid_diags_rtl) / len(valid_diags_rtl)) if valid_diags_rtl else 100.0
+            is_cong_rtl = avg_speed_rtl < RULES.get("congestion", {}).get("speed_rel_thresh", 0.05) * avg_diag_rtl
         else:
             is_cong_rtl = False
 
@@ -733,7 +745,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                 last_t = last_seen_time.get(t_id, t_sec)
                 # If track has been unseen for more than 1.5 seconds, close it
                 if (t_sec - last_t) >= 1.5:
-                    _close_event(active_events, events, t_id, ev_label, last_t)
+                    _close_event(active_events, events, emitted_events, t_id, ev_label, last_t)
 
         frame_idx += 1
 
@@ -752,7 +764,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
 
     # Close any remaining active events at the end of the video
     for (t_id, ev_label), ev_info in list(active_events.items()):
-        _close_event(active_events, events, t_id, ev_label, final_duration)
+        _close_event(active_events, events, emitted_events, t_id, ev_label, final_duration)
     active_events.clear()
 
     # Close any remaining near-miss pairs at the end of the video
@@ -785,7 +797,7 @@ class RiskEstimator:
         self.meta = meta
         self.model = _load_yolo("yolov8n.pt")
         fps = self.meta.get("fps", 30)
-        self.tracker = sv.ByteTrack(track_thresh=0.25, track_buffer=int(fps * 4))
+        self.tracker = make_tracker(fps)
         self.frame_count = 0
         self.last_risk = 0.0
         self.track_history = {}

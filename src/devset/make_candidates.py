@@ -26,17 +26,20 @@ def main():
         writer = csv.writer(f)
         writer.writerow(["video", "idx", "label", "start", "end", "clip_path", "verdict(TP/FP/?)", "true_start", "true_end", "true_label", "notes"])
         
-        for video_name, data in preds.items():
+        for video_name, data in preds.get("videos", {}).items():
             events = data.get("events", [])
             video_path = repo_root / "samples" / video_name
             if not video_path.exists():
                 print(f"Video {video_path} not found.")
                 continue
                 
+            vid_log = preds.get("log", {}).get(video_name, {})
+            duration_meta = vid_log.get("duration", 0)
+                
             for idx, event in enumerate(events):
                 start, end, label = event
                 clip_start = max(0, start - 3)
-                clip_end = min(data.get("duration", end + 3), end + 3)
+                clip_end = min(duration_meta or end + 3, end + 3)
                 duration = clip_end - clip_start
                 
                 clip_filename = f"{Path(video_name).stem}_{idx:03d}_{label}.mp4"
@@ -46,8 +49,6 @@ def main():
                 # but rules specify to use src.annotate.py. We'll just call annotate.py via subprocess to cut and annotate!)
                 print(f"Generating clip {clip_out}...")
                 
-                # src/annotate.py takes: --video, --events, --out, --start, --end
-                # Wait, does annotate.py support --start and --end? Let's check annotate.py args later.
                 cmd = [
                     "python", str(repo_root / "src" / "annotate.py"),
                     "--video", str(video_path),
@@ -58,9 +59,9 @@ def main():
                 # For simplicity, we write out the single event to a temporary file for annotate.py to render just this event banner
                 tmp_json = devset_dir / "tmp_event.json"
                 with open(tmp_json, "w") as tf:
-                    json.dump({video_name: {"events": [event]}}, tf)
+                    json.dump({"videos": {video_name: {"events": [event]}}}, tf)
                     
-                cmd.extend(["--pred", str(tmp_json)])
+                cmd.extend(["--events", str(tmp_json)])
                 
                 try:
                     subprocess.run(cmd, check=True)

@@ -107,7 +107,8 @@ def render_annotated(
         out_path, cv2.VideoWriter_fourcc(*"mp4v"), max(1.0, fps / max(1, stride)), (out_w, out_h)
     )
 
-    tracker = sv.ByteTrack()
+    from src.tracking import make_tracker
+    tracker = make_tracker(fps, stride)
     box_annotator = sv.BoxAnnotator(thickness=2)
     label_annotator = sv.LabelAnnotator(text_scale=0.6, text_thickness=2)
 

@@ -13,7 +13,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from solution import CLASSES, SCENE_CONFIG, RiskEstimator, detect_events
+from solution import CLASSES, RiskEstimator, detect_events
+from src.scene import SCENE_CONFIG
 from src.annotate import render_annotated
 
 # Live demo constraints (stated publicly per the hackathon website rubric:
@@ -1345,10 +1346,6 @@ if selected_section == "Team":
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                         GitHub
                     </a>
-                    <a class="btn-link" href="https://linkedin.com" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-                        LinkedIn
-                    </a>
                 </div>
             </div>
             """,
@@ -1492,20 +1489,16 @@ elif selected_section == "Problem and Approach":
 
     with approach_tabs[1]:
         st.markdown("#### 21-Zone Geometric Rules Matrix")
-        rules_df = pd.DataFrame([
-            {"Class": "red_light", "Trigger Zone": "Stop Line Red Vector", "Evaluation Logic": "Centroid crosses stop line vector while HSV red LED mask >= 15 px", "Min Duration": "0.5s"},
-            {"Class": "stop_line", "Trigger Zone": "Stop Line Red Vector", "Evaluation Logic": "Centroid halts across stop line boundary without crossing through", "Min Duration": "0.5s"},
-            {"Class": "jaywalking", "Trigger Zone": "Carriageway Polygons", "Evaluation Logic": "Pedestrian centroid inside vehicle carriageway outside designated crosswalks", "Min Duration": "0.5s"},
-            {"Class": "failure_to_yield", "Trigger Zone": "Crosswalk Zebras (1, 2, 3)", "Evaluation Logic": "Vehicle enters crosswalk polygon while pedestrian present within < 80 px", "Min Duration": "0.5s"},
-            {"Class": "wrong_way", "Trigger Zone": "Designated Travel Lanes", "Evaluation Logic": "Displacement vector dot product < -0.3 against designated lane flow direction", "Min Duration": "0.5s"},
-            {"Class": "solid_line_crossing", "Trigger Zone": "Solid White Lane Dividers", "Evaluation Logic": "Lateral vehicle trajectory crossing solid line polygon between adjacent lanes", "Min Duration": "0.5s"},
-            {"Class": "stopped_vehicle", "Trigger Zone": "Active Travel Carriageway", "Evaluation Logic": "Vehicle displacement < 3 px/s sustained for >= 10.0 consecutive seconds", "Min Duration": "10.0s"},
-            {"Class": "illegal_turn", "Trigger Zone": "Intersection Maneuver Corridor", "Evaluation Logic": "Vehicle turns from non-turning lane or executes prohibited direction", "Min Duration": "0.5s"},
-            {"Class": "illegal_u_turn", "Trigger Zone": "Intersection Center Box", "Evaluation Logic": "Trajectory heading reversal > 140 degrees within intersection perimeter", "Min Duration": "0.5s"},
-            {"Class": "congestion", "Trigger Zone": "All Active Travel Lanes", "Evaluation Logic": ">= 3 vehicles stationary/crawling across stop line jam corridor", "Min Duration": "0.5s"},
-            {"Class": "road_obstacle", "Trigger Zone": "Active Travel Carriageway", "Evaluation Logic": "Debris / animal / fallen object stationary on carriageway for >= 1.0 s", "Min Duration": "1.0s"},
-            {"Class": "near_miss", "Trigger Zone": "Pairwise Vehicle Proximity", "Evaluation Logic": "Pair closes to < 0.85x combined bbox diagonal with hard braking (>55% speed drop in 0.5s), zero contact", "Min Duration": "0.5s"},
-        ])
+        from src.config import RULES
+        rules_list = []
+        for cls, cfg in RULES.items():
+            desc = ", ".join([f"{k}={v}" for k, v in cfg.items() if k != "min_duration"])
+            rules_list.append({
+                "Class": cls,
+                "Min Duration": f"{cfg.get('min_duration', 0.5)}s",
+                "Heuristics": desc if desc else "Geom triggers"
+            })
+        rules_df = pd.DataFrame(rules_list)
         st.dataframe(rules_df, use_container_width=True)
 
     with approach_tabs[2]:
@@ -2078,7 +2071,12 @@ elif selected_section == "Live Demo":
                 key="file_uploader_deck",
             )
             if uploaded_file is not None:
-                upload_dest = Path("temp_uploaded.mp4").resolve()
+                import tempfile
+                import uuid
+                if "session_id" not in st.session_state:
+                    st.session_state["session_id"] = str(uuid.uuid4())
+                tmp_dir = Path(tempfile.mkdtemp(prefix=f"wiut_{st.session_state['session_id']}_"))
+                upload_dest = (tmp_dir / uploaded_file.name).resolve()
                 current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
                 if st.session_state.get("last_uploaded_id") != current_file_id:
                     # New upload: drop every cached result tied to the previous file,
