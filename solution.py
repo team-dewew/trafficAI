@@ -803,18 +803,16 @@ class RiskEstimator:
         """
         h, w = frame.shape[:2]
         sx, sy = w / 3840.0, h / 2160.0
-        cfg = shift_scene_config(SCENE_CONFIG, 0, 0)
+        from src.scene import build_scene
+        zones = build_scene(w, h, 0, 0)
+        cfg = zones["raw"]
 
-        def _scale(poly: np.ndarray) -> np.ndarray:
-            return (poly.astype(np.float64) * np.array([sx, sy])).astype(np.int32)
-
+        # Polygons are already scaled by build_scene, so we don't need to scale them again
         self._road_polys = [
-            _scale(cfg[k])
-            for k in ("lane_ltr", "lane_rtl", "intersection_core", "right_turn_zone", "lower_core")
+            cfg["lane_ltr"], cfg["lane_rtl"], cfg["intersection_core"],
+            cfg["right_turn_zone"], cfg["lower_core"]
         ]
-        self._safe_polys = [_scale(p) for p in cfg["crosswalks"]] + [
-            _scale(p) for p in cfg["sidewalks"]
-        ]
+        self._safe_polys = cfg["crosswalks"] + cfg["sidewalks"]
 
     def _point_in(self, polys: list[np.ndarray], x: float, y: float) -> bool:
         return any(
@@ -950,22 +948,39 @@ class RiskEstimator:
                     spd_j = speeds.get(t_id_j, 0.0)
 
                     # Scale-aware proximity: thresholds follow the vehicles' own
-                    # size, so near-camera and far-field pairs are judged fairly.
                     dist = float(np.hypot(cx_i - cx_j, cy_i - cy_j))
                     avg_diag = 0.5 * (diag_i + diag_j)
                     pair_key = (min(t_id_i, t_id_j), max(t_id_i, t_id_j))
                     prev_dist = self.pair_last_dist.get(pair_key)
                     self.pair_last_dist[pair_key] = dist
                     closing = prev_dist is not None and dist < prev_dist - (2.0 / scale_to_640)
-                    approach_speed = max(spd_i, spd_j)
 
                     if self._compute_iou(box_i, box_j) >= 0.03 or not closing:
                         continue  # already in contact (accident territory) or separating
 
-                    if dist < 0.75 * avg_diag and approach_speed > 2.5:
-                        current_risk = max(current_risk, 0.80)
-                    elif dist < 0.95 * avg_diag and approach_speed > 1.5:
-                        current_risk = max(current_risk, 0.45)
+                    hist_i = self.track_history.get(t_id_i, [])
+                    hist_j = self.track_history.get(t_id_j, [])
+                    if len(hist_i) >= 2 and len(hist_j) >= 2:
+                        frames_i = self.track_frames[t_id_i]
+                        frames_j = self.track_frames[t_id_j]
+                        df_i = max(1, frames_i[-1] - frames_i[0])
+                        df_j = max(1, frames_j[-1] - frames_j[0])
+                        
+                        vx_i = (hist_i[-1][0] - hist_i[0][0]) / df_i
+                        vy_i = (hist_i[-1][1] - hist_i[0][1]) / df_i
+                        vx_j = (hist_j[-1][0] - hist_j[0][0]) / df_j
+                        vy_j = (hist_j[-1][1] - hist_j[0][1]) / df_j
+                        
+                        rel_vx = vx_i - vx_j
+                        rel_vy = vy_i - vy_j
+                        rel_speed = float(np.hypot(rel_vx, rel_vy))
+                        
+                        if rel_speed > 1.0:
+                            fps = self.meta.get("fps", 30)
+                            ttc_sec = (dist / rel_speed) / max(fps, 1.0)
+                            if ttc_sec < 3.0:
+                                r = 1.0 / (1.0 + np.exp(-3.0 * (1.5 - ttc_sec)))
+                                current_risk = max(current_risk, float(r))
 
             # Pedestrian–vehicle conflict: a moving vehicle bearing down on a
             # pedestrian who is on the carriageway is a strong pre-crash signal.
