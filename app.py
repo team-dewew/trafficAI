@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import tempfile
@@ -338,30 +339,38 @@ st.markdown(
 
     /* Team Badge Cards */
     .team-badge-card {
-        background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 32, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 11px;
-        padding: 22px 20px;
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.9) 0%, rgba(10, 16, 32, 0.98) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 12px;
+        padding: 26px 22px;
         text-align: center;
         position: relative;
         transition: all 0.22s ease;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
     }
     .team-badge-card:hover {
         transform: translateY(-3px);
         border-color: #00f2fe;
-        box-shadow: 0 8px 24px rgba(0, 242, 254, 0.12);
+        box-shadow: 0 10px 28px rgba(0, 242, 254, 0.16);
     }
     .team-avatar-ring {
-        width: 64px;
-        height: 64px;
+        width: 104px;
+        height: 104px;
         border-radius: 50%;
         background: linear-gradient(135deg, #0284c7, #00f2fe);
-        padding: 2px;
-        margin: 0 auto 12px auto;
+        padding: 3px;
+        margin: 0 auto 16px auto;
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+    }
+    .team-avatar-img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
     }
     .mono-avatar {
         font-family: 'Space Grotesk', sans-serif !important;
@@ -378,65 +387,70 @@ st.markdown(
         border-radius: 50% !important;
     }
     .team-name {
-        font-size: 1.15rem;
+        font-size: 1.28rem;
         font-weight: 700;
         color: #f8fafc;
-        margin-bottom: 3px;
+        margin-bottom: 4px;
         font-family: 'Space Grotesk', sans-serif;
+        letter-spacing: -0.01em;
     }
     .team-role-pill {
         display: inline-block;
-        background: rgba(56, 189, 248, 0.1);
-        border: 1px solid rgba(56, 189, 248, 0.3);
+        background: rgba(56, 189, 248, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.35);
         color: #38bdf8;
         font-size: 0.72rem;
         font-weight: 700;
-        padding: 2px 8px;
+        padding: 3px 10px;
         border-radius: 20px;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
         font-family: 'JetBrains Mono', monospace;
+        letter-spacing: 0.5px;
     }
     .team-bio {
-        font-size: 0.84rem;
+        font-size: 0.85rem;
         color: #94a3b8;
-        line-height: 1.5;
-        margin-bottom: 14px;
-        min-height: 44px;
+        line-height: 1.55;
+        margin-bottom: 16px;
+        min-height: 48px;
     }
     .team-skills {
         display: flex;
         flex-wrap: wrap;
-        gap: 5px;
+        gap: 6px;
         justify-content: center;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
     }
     .skill-chip {
-        background: rgba(30, 41, 59, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(30, 41, 59, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: #cbd5e1;
-        font-size: 0.7rem;
-        padding: 2px 7px;
+        font-size: 0.72rem;
+        padding: 3px 8px;
         border-radius: 4px;
         font-family: 'JetBrains Mono', monospace;
     }
     .btn-link {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
         background: rgba(15, 23, 42, 0.9);
-        border: 1px solid rgba(56, 189, 248, 0.28);
+        border: 1px solid rgba(56, 189, 248, 0.3);
         color: #f1f5f9 !important;
         text-decoration: none;
-        padding: 5px 12px;
+        padding: 6px 14px;
         border-radius: 6px;
-        font-size: 0.76rem;
-        margin: 2px 3px;
+        font-size: 0.78rem;
+        margin: 2px 4px;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
         transition: all 0.2s ease;
     }
     .btn-link:hover {
-        background: #0284c7;
-        color: #ffffff !important;
+        background: rgba(56, 189, 248, 0.2);
+        color: #00f2fe !important;
         border-color: #00f2fe;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(0, 242, 254, 0.2);
     }
 
     /* Main Canvas Action Buttons */
@@ -868,6 +882,17 @@ st.markdown(
 # Helper: Metadata, Geometry Overlay, Web Preview, & Benchmark Data
 # ----------------------------------------------------------------------------
 @st.cache_data(show_spinner=False)
+def get_image_base64(filepath: str) -> str:
+    """Read an image file and return base64 data URI for instant web display."""
+    p = Path(filepath).resolve()
+    if p.exists():
+        with open(p, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded}"
+    return ""
+
+
+@st.cache_data(show_spinner=False)
 def get_video_metadata(video_path: str) -> dict:
     """Extract metadata (FPS, frames, duration, resolution, size) safely."""
     try:
@@ -1114,83 +1139,77 @@ if selected_section == "Team":
         mini_spec="CUDA FP16",
     )
 
-    t1, t2, t3 = st.columns(3)
+    ollabergan_b64 = get_image_base64("assets/team/ollabergan.jpg")
+    seymonbek_b64 = get_image_base64("assets/team/seymonbek.jpg")
 
-    with t1:
+    m1, m2 = st.columns(2, gap="large")
+
+    with m1:
         st.markdown(
-            """
+            f"""
             <div class="team-badge-card">
                 <div class="team-avatar-ring">
-                    <div class="mono-avatar">CV</div>
+                    <img src="{ollabergan_b64}" class="team-avatar-img" alt="Ollabergan" />
                 </div>
-                <div class="team-name">Lead CV Engineer</div>
-                <div class="team-role-pill">PERCEPTION & GEOMETRY</div>
+                <div class="team-name">Ollabergan</div>
+                <div class="team-role-pill">LEAD CV & FULL-STACK AI ARCHITECT</div>
                 <div class="team-bio">
-                    Architected the 21-zone geometric spatial map, dynamic YOLO traffic light auto-alignment, and multi-object trajectory association logic.
+                    Architected the end-to-end Traffic AI system: 21-zone geometric spatial map, dynamic traffic light auto-alignment, multi-object trajectory association logic, and Streamlit Control Center UI.
                 </div>
                 <div class="team-skills">
                     <span class="skill-chip">PyTorch</span>
                     <span class="skill-chip">YOLO11</span>
                     <span class="skill-chip">Spatial Vector</span>
                     <span class="skill-chip">OpenCV</span>
+                    <span class="skill-chip">ByteTrack</span>
+                    <span class="skill-chip">Streamlit</span>
+                    <span class="skill-chip">CUDA FP16</span>
                 </div>
-                <div>
-                    <a class="btn-link" href="https://github.com" target="_blank">GitHub</a>
-                    <a class="btn-link" href="https://linkedin.com" target="_blank">LinkedIn</a>
+                <div style="margin-top: 12px;">
+                    <a class="btn-link" href="https://github.com/DeWeWO" target="_blank">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        GitHub
+                    </a>
+                    <a class="btn-link" href="https://www.linkedin.com/in/dewew/" target="_blank">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                        LinkedIn
+                    </a>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with t2:
+    with m2:
         st.markdown(
-            """
+            f"""
             <div class="team-badge-card">
                 <div class="team-avatar-ring">
-                    <div class="mono-avatar">DL</div>
+                    <img src="{seymonbek_b64}" class="team-avatar-img" alt="Seymonbek Ikramov" />
                 </div>
-                <div class="team-name">ML & Anomaly Specialist</div>
-                <div class="team-role-pill">DEEP LEARNING & RISK</div>
+                <div class="team-name">Seymonbek Ikramov</div>
+                <div class="team-role-pill">DEEP LEARNING & CAUSAL RISK SPECIALIST</div>
                 <div class="team-bio">
-                    Trained and integrated the secondary anomaly model (YOLOv8x Crash/Fire) and formulated causal accident risk heuristics for Part B.
+                    Trained and integrated the secondary anomaly model (YOLOv8x Crash/Fire), formulated causal accident risk estimation P(t) without future leakage, and designed temporal TTC risk heuristics.
                 </div>
                 <div class="team-skills">
+                    <span class="skill-chip">PyTorch</span>
                     <span class="skill-chip">YOLOv8x</span>
-                    <span class="skill-chip">ByteTrack</span>
+                    <span class="skill-chip">Anomaly Detection</span>
+                    <span class="skill-chip">Risk Estimator</span>
                     <span class="skill-chip">Time-To-Collision</span>
                     <span class="skill-chip">NumPy</span>
+                    <span class="skill-chip">Data Modeling</span>
                 </div>
-                <div>
-                    <a class="btn-link" href="https://github.com" target="_blank">GitHub</a>
-                    <a class="btn-link" href="https://linkedin.com" target="_blank">LinkedIn</a>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with t3:
-        st.markdown(
-            """
-            <div class="team-badge-card">
-                <div class="team-avatar-ring">
-                    <div class="mono-avatar">SYS</div>
-                </div>
-                <div class="team-name">Full-Stack AI Engineer</div>
-                <div class="team-role-pill">SYSTEMS & PIPELINE</div>
-                <div class="team-bio">
-                    Engineered GPU CUDA acceleration, sub-budget latency profiling, deterministic seed locking, and Streamlit Control Center UI.
-                </div>
-                <div class="team-skills">
-                    <span class="skill-chip">CUDA FP16</span>
-                    <span class="skill-chip">Streamlit</span>
-                    <span class="skill-chip">Deterministic</span>
-                    <span class="skill-chip">Profiling</span>
-                </div>
-                <div>
-                    <a class="btn-link" href="https://github.com" target="_blank">GitHub</a>
-                    <a class="btn-link" href="https://linkedin.com" target="_blank">LinkedIn</a>
+                <div style="margin-top: 12px;">
+                    <a class="btn-link" href="https://github.com/Seymonbek" target="_blank">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                        GitHub
+                    </a>
+                    <a class="btn-link" href="https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/" target="_blank">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                        LinkedIn
+                    </a>
                 </div>
             </div>
             """,

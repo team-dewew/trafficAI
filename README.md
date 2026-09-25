@@ -104,8 +104,8 @@ if torch.cuda.is_available():
 
 ---
 
-## Team
+## Engineering Squad
 
-- **[Member 1 - Role]**: Lead Computer Vision Engineer (Geometric Reasoning & Tracking Architecture)
-- **[Member 2 - Role]**: Deep Learning Engineer (Model Training & Anomaly Detection)
-- **[Member 3 - Role]**: DevOps & Full-Stack AI Engineer (Inference Optimization & Streamlit Dashboard)
+- **Ollabergan** — Lead Computer Vision & Full-Stack AI Architect ([GitHub](https://github.com/DeWeWO) • [LinkedIn](https://www.linkedin.com/in/dewew/))
+- **Seymonbek Ikramov** — Deep Learning & Causal Risk Specialist ([GitHub](https://github.com/Seymonbek) • [LinkedIn](https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/))
+
