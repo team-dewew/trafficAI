@@ -98,6 +98,8 @@ from src.models import _load_yolo
 def _open_event(active_events: dict, track_id: int, label: str, t_sec: float) -> None:
     """Idempotently mark an event as active for (track_id, label)."""
     key = (track_id, label)
+    if key in active_events.get("_emitted", set()):
+        return
     if key not in active_events:
         active_events[key] = {"label": label, "start_sec": t_sec}
 
@@ -110,6 +112,8 @@ def _close_event(active_events: dict, events: list, track_id: int, label: str, e
     start = info["start_sec"]
     if end_sec > start and (end_sec - start) >= MIN_EVENT_DURATION.get(label, 0.0):
         events.append([round(start, 3), round(end_sec, 3), label])
+        if "_emitted" in active_events:
+            active_events["_emitted"].add((track_id, label))
 
 
 from src.traffic_light import TrafficLightDetector
@@ -245,8 +249,8 @@ def merge_same_class_segments(events: list[list]) -> list[list]:
 
         for cur in intervals[1:]:
             prev = merged[-1]
-            # 3. Merge Gap: If next_start - current_end <= 2.0 seconds, merge them
-            if cur[0] - prev[1] <= 2.0:
+            # 3. Merge Gap: If next_start - current_end <= 1.0 seconds, merge them
+            if cur[0] - prev[1] <= 1.0:
                 prev[1] = max(prev[1], cur[1])
             else:
                 merged.append(cur)
@@ -324,9 +328,9 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
     right_turn_zone = zones["right_turn_zone"]
 
     # 6. Initialize Multi-Object Tracker (ByteTrack)
-    tracker = sv.ByteTrack()
-
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 29.97)
+    tracker = sv.ByteTrack(track_thresh=0.25, track_buffer=int(fps * 4))
+
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration_from_meta = (total_frames / fps) if (fps > 0 and total_frames > 0) else 0.0
 
@@ -338,8 +342,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
     track_history: dict[int, list[tuple[float, float, float]]] = {}
     last_seen_time: dict[int, float] = {}
 
-    # active_events[(track_id, label)] = {"label": str, "start_sec": float}
-    active_events: dict[tuple[int, str], dict] = {}
+    active_events: dict = {"_emitted": set()}
     # active_nm[(id_a, id_b)] = {"start": float, "last": float} — near-miss pairs
     active_nm: dict[tuple[int, int], dict] = {}
     global_events: dict[str, dict] = {}  # for zone-wide congestion tracking
@@ -496,7 +499,8 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                     "cy": cy,
                     "diag": float(np.hypot(x2 - x1, y2 - y1)),
                     "box": tracked_detections.xyxy[i],
-                    "hard_brake": hard_brake,
+                    "vx": mv_dx,
+                    "vy": mv_dy,
                 })
 
             # Update line crossing memory for this vehicle
@@ -701,20 +705,15 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                     continue
                 pair_key = (min(va["id"], vb["id"]), max(va["id"], vb["id"]))
                 dist = float(np.hypot(va["cx"] - vb["cx"], va["cy"] - vb["cy"]))
-                close_thresh = 0.85 * (va["diag"] + vb["diag"]) / 2.0
-                clear_thresh = 1.4 * close_thresh
-                boxes_touch = _boxes_iou(va["box"], vb["box"]) >= 0.03
-                if (
-                    dist < close_thresh
-                    and not boxes_touch
-                    and (va["hard_brake"] or vb["hard_brake"])
-                ):
+                rel_speed = float(np.hypot(va["vx"] - vb["vx"], va["vy"] - vb["vy"]))
+                
+                if dist < 30.0 and rel_speed > 10.0:
                     if pair_key not in active_nm:
                         active_nm[pair_key] = {"start": t_sec, "last": t_sec}
                     active_nm[pair_key]["last"] = t_sec
-                elif pair_key in active_nm and (dist >= clear_thresh or boxes_touch):
+                elif pair_key in active_nm and dist >= 30.0:
                     nm = active_nm.pop(pair_key)
-                    if nm["last"] > nm["start"]:
+                    if nm["last"] > nm["start"] and (nm["last"] - nm["start"]) > 0.5:
                         events.append([round(nm["start"], 3), round(nm["last"], 3), "near_miss"])
 
         # Close active near-miss pairs whose tracks left the scene
@@ -724,7 +723,7 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
                 and (t_sec - last_seen_time.get(tid, t_sec)) >= 1.5
                 for tid in pair_key
             ):
-                if nm["last"] > nm["start"]:
+                if nm["last"] > nm["start"] and (nm["last"] - nm["start"]) > 0.5:
                     events.append([round(nm["start"], 3), round(nm["last"], 3), "near_miss"])
                 del active_nm[pair_key]
 
@@ -785,7 +784,8 @@ class RiskEstimator:
         """
         self.meta = meta
         self.model = _load_yolo("yolov8n.pt")
-        self.tracker = sv.ByteTrack()
+        fps = self.meta.get("fps", 30)
+        self.tracker = sv.ByteTrack(track_thresh=0.25, track_buffer=int(fps * 4))
         self.frame_count = 0
         self.last_risk = 0.0
         self.track_history = {}
