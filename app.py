@@ -17,17 +17,17 @@ import streamlit as st
 from solution import CLASSES, SCENE_CONFIG, RiskEstimator, detect_events
 
 # ----------------------------------------------------------------------------
-# Page Configuration
+# Page Configuration (Minimalist, Professional)
 # ----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Traffic AI — Smart City Surveillance Control Center",
-    page_icon="🚦",
+    page_title="Traffic AI — Surveillance Control Center",
+    page_icon=":material/sensors:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ----------------------------------------------------------------------------
-# UI/UX Pro-Max Design System & Custom CSS (Control Center / OLED Theme)
+# UI/UX Design System: Minimalist Swiss / Linear Dark Control Center
 # ----------------------------------------------------------------------------
 st.markdown(
     """
@@ -64,15 +64,15 @@ st.markdown(
         background: linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(11, 17, 32, 0.98) 100%);
         border: 1px solid rgba(56, 189, 248, 0.22);
         border-top: 2px solid #00f2fe;
-        border-radius: 14px;
-        padding: 22px 28px;
-        margin-bottom: 24px;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 22px;
         box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        gap: 14px;
+        gap: 12px;
     }
     
     .hero-title-group {
@@ -82,10 +82,10 @@ st.markdown(
 
     .section-eyebrow {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.76rem;
+        font-size: 0.74rem;
         font-weight: 700;
         color: #38bdf8;
-        letter-spacing: 1.5px;
+        letter-spacing: 1.4px;
         text-transform: uppercase;
         margin-bottom: 4px;
         display: flex;
@@ -94,7 +94,7 @@ st.markdown(
     }
     
     .hero-title {
-        font-size: 2.1rem;
+        font-size: 1.95rem;
         font-weight: 800;
         background: linear-gradient(135deg, #f8fafc 0%, #00f2fe 55%, #38bdf8 100%);
         -webkit-background-clip: text;
@@ -104,9 +104,9 @@ st.markdown(
     }
     
     .hero-subtitle {
-        font-size: 0.94rem;
+        font-size: 0.9rem;
         color: #94a3b8;
-        margin-top: 5px;
+        margin-top: 4px;
         margin-bottom: 0;
     }
 
@@ -117,21 +117,21 @@ st.markdown(
         background: rgba(16, 185, 129, 0.12);
         border: 1px solid rgba(16, 185, 129, 0.45);
         color: #10b981;
-        padding: 6px 14px;
+        padding: 5px 12px;
         border-radius: 9999px;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.8rem;
+        font-size: 0.76rem;
         font-weight: 700;
         letter-spacing: 0.8px;
         box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
     }
     
     .status-dot {
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
         background-color: #10b981;
         border-radius: 50%;
-        margin-right: 8px;
+        margin-right: 7px;
         box-shadow: 0 0 8px #10b981;
         animation: pulse-dot 1.8s infinite;
     }
@@ -146,8 +146,8 @@ st.markdown(
     .metric-card {
         background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
         border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 12px;
-        padding: 18px 20px;
+        border-radius: 10px;
+        padding: 16px 18px;
         text-align: left;
         position: relative;
         overflow: hidden;
@@ -164,12 +164,12 @@ st.markdown(
         position: absolute;
         top: 0;
         left: 0;
-        width: 4px;
+        width: 3px;
         height: 100%;
         background: linear-gradient(180deg, #00f2fe, #2563eb);
     }
     .metric-value {
-        font-size: 2.1rem;
+        font-size: 1.95rem;
         font-weight: 800;
         color: #f8fafc;
         font-family: 'Space Grotesk', sans-serif;
@@ -177,70 +177,74 @@ st.markdown(
         line-height: 1.1;
     }
     .metric-label {
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 700;
         color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: 1.2px;
-        margin-top: 6px;
+        margin-top: 5px;
         font-family: 'JetBrains Mono', monospace;
     }
     .metric-sub {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         color: #38bdf8;
         margin-top: 3px;
         font-weight: 500;
     }
 
-    /* High-Tech Glass Container / Panel */
+    /* Glass Panels */
     .glass-panel {
         background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(9, 14, 26, 0.90) 100%);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 20px 24px;
-        margin-bottom: 20px;
+        border-radius: 11px;
+        padding: 18px 22px;
+        margin-bottom: 18px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
 
-    /* Team Cards */
+    /* Monogram Team Badges */
     .team-badge-card {
         background: linear-gradient(145deg, rgba(15, 23, 42, 0.90) 0%, rgba(10, 16, 32, 0.98) 100%);
         border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 14px;
-        padding: 24px;
+        border-radius: 12px;
+        padding: 22px 20px;
         text-align: center;
         position: relative;
         transition: all 0.25s ease;
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
     }
     .team-badge-card:hover {
-        transform: translateY(-4px);
+        transform: translateY(-3px);
         border-color: #00f2fe;
-        box-shadow: 0 12px 30px rgba(0, 242, 254, 0.15);
+        box-shadow: 0 10px 28px rgba(0, 242, 254, 0.15);
     }
     .team-avatar-ring {
-        width: 76px;
-        height: 76px;
+        width: 68px;
+        height: 68px;
         border-radius: 50%;
         background: linear-gradient(135deg, #0284c7, #00f2fe);
         padding: 2px;
-        margin: 0 auto 14px auto;
+        margin: 0 auto 12px auto;
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    .team-avatar-inner {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        background: #0b1120;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2.2rem;
+    .mono-avatar {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-weight: 800 !important;
+        font-size: 1.35rem !important;
+        letter-spacing: -0.5px !important;
+        color: #00f2fe !important;
+        background: #0b1120 !important;
+        width: 100% !important;
+        height: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
     }
     .team-name {
-        font-size: 1.25rem;
+        font-size: 1.15rem;
         font-weight: 700;
         color: #f8fafc;
         margin-bottom: 3px;
@@ -251,33 +255,33 @@ st.markdown(
         background: rgba(56, 189, 248, 0.12);
         border: 1px solid rgba(56, 189, 248, 0.35);
         color: #38bdf8;
-        font-size: 0.76rem;
+        font-size: 0.74rem;
         font-weight: 700;
-        padding: 3px 10px;
+        padding: 2px 9px;
         border-radius: 20px;
-        margin-bottom: 12px;
+        margin-bottom: 11px;
         font-family: 'JetBrains Mono', monospace;
     }
     .team-bio {
-        font-size: 0.88rem;
+        font-size: 0.85rem;
         color: #94a3b8;
         line-height: 1.5;
-        margin-bottom: 16px;
-        min-height: 52px;
+        margin-bottom: 14px;
+        min-height: 48px;
     }
     .team-skills {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 5px;
         justify-content: center;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
     .skill-chip {
         background: rgba(30, 41, 59, 0.7);
         border: 1px solid rgba(255, 255, 255, 0.08);
         color: #cbd5e1;
-        font-size: 0.72rem;
-        padding: 3px 8px;
+        font-size: 0.7rem;
+        padding: 2px 7px;
         border-radius: 4px;
         font-family: 'JetBrains Mono', monospace;
     }
@@ -287,10 +291,10 @@ st.markdown(
         border: 1px solid rgba(56, 189, 248, 0.3);
         color: #f1f5f9 !important;
         text-decoration: none;
-        padding: 6px 14px;
+        padding: 5px 12px;
         border-radius: 6px;
-        font-size: 0.8rem;
-        margin: 2px 4px;
+        font-size: 0.78rem;
+        margin: 2px 3px;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
         transition: all 0.2s ease;
@@ -302,40 +306,41 @@ st.markdown(
         box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
     }
 
-    /* Primary Execution Button for Main Canvas */
+    /* Primary Action Buttons in Main Canvas */
     .main .stButton > button {
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
         color: #ffffff !important;
         font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 700 !important;
-        font-size: 1.02rem !important;
+        font-size: 0.98rem !important;
         letter-spacing: 0.3px !important;
         border: 1px solid rgba(0, 242, 254, 0.4) !important;
-        border-radius: 10px !important;
-        padding: 12px 28px !important;
+        border-radius: 8px !important;
+        padding: 10px 24px !important;
         transition: all 0.22s ease !important;
-        box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35) !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
     }
     .main .stButton > button:hover {
         background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%) !important;
         border-color: #00f2fe !important;
-        box-shadow: 0 6px 24px rgba(0, 242, 254, 0.5) !important;
+        box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5) !important;
         transform: translateY(-2px) !important;
     }
 
-    /* Tabs Styling */
+    /* Clean Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 6px;
         background-color: rgba(15, 23, 42, 0.5);
-        padding: 6px 8px;
-        border-radius: 10px;
+        padding: 5px 6px;
+        border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 8px;
-        padding: 8px 18px;
+        border-radius: 6px;
+        padding: 7px 16px;
         font-family: 'Space Grotesk', sans-serif;
         font-weight: 600;
+        font-size: 0.88rem;
         color: #94a3b8;
         border: none;
     }
@@ -349,15 +354,15 @@ st.markdown(
     .pill-strip {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        margin: 12px 0;
+        gap: 8px;
+        margin: 10px 0;
     }
     .pill-item {
         background: rgba(15, 23, 42, 0.7);
         border: 1px solid rgba(56, 189, 248, 0.2);
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-size: 0.82rem;
+        padding: 5px 12px;
+        border-radius: 16px;
+        font-size: 0.78rem;
         font-family: 'JetBrains Mono', monospace;
         color: #e2e8f0;
     }
@@ -366,205 +371,207 @@ st.markdown(
     }
 
     /* =========================================================================
-       SIDEBAR CONTROL CENTER NAVIGATION (ZERO RADIO CIRCLES)
+       SIDEBAR: ZERO-SCROLL, ULTRA-MINIMALIST, MODERN WEB APP STYLE
        ========================================================================= */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #050a17 0%, #070e20 50%, #030712 100%) !important;
+        background: linear-gradient(180deg, #040814 0%, #060b18 50%, #030712 100%) !important;
         border-right: 1px solid rgba(56, 189, 248, 0.16) !important;
-        padding-top: 1.2rem !important;
+        padding-top: 0 !important;
+        overflow-y: hidden !important;
+    }
+    
+    /* Remove huge default padding of Streamlit */
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 0.85rem !important;
+        padding-bottom: 0.5rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 
-    /* Custom Laser Divider */
-    .sidebar-divider {
-        height: 1px;
-        background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.25) 50%, transparent 100%);
-        margin: 16px 0;
-        width: 100%;
-    }
-
-    /* Section Eyebrow Label */
-    .sidebar-section-label {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: #38bdf8;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-        margin-bottom: 10px;
+    /* Minimalist Brand Bar */
+    .sidebar-brand-minimal {
         display: flex;
         align-items: center;
-        gap: 6px;
+        justify-content: space-between;
+        padding: 4px 2px 2px 2px;
+        margin-bottom: 2px;
     }
-
-    /* Sidebar Header Brand Card */
-    .sidebar-brand-card {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 30, 0.98) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.25);
-        border-radius: 12px;
-        padding: 14px 16px;
+    .brand-left {
         display: flex;
         align-items: center;
-        gap: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        gap: 8px;
     }
-    .brand-icon-box {
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
-        background: rgba(56, 189, 248, 0.12);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
+    .brand-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #00f2fe;
+        box-shadow: 0 0 10px #00f2fe;
     }
     .brand-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 1.15rem;
+        font-size: 1.05rem;
         font-weight: 800;
         color: #f8fafc;
-        line-height: 1.1;
         letter-spacing: -0.3px;
     }
-    .brand-sub {
+    .brand-highlight {
+        color: #00f2fe;
+    }
+    .brand-status-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        padding: 2px 7px;
+        border-radius: 12px;
+        letter-spacing: 0.6px;
+    }
+    .sidebar-subtext {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: #64748b;
+        margin-top: 2px;
+        margin-bottom: 8px;
+        padding-left: 2px;
+    }
+
+    /* Laser Divider */
+    .sidebar-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.25) 50%, transparent 100%);
+        margin: 8px 0 10px 0;
+        width: 100%;
+    }
+
+    /* Section Label */
+    .sidebar-section-label {
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.68rem;
         font-weight: 700;
         color: #38bdf8;
-        letter-spacing: 0.6px;
-    }
-    .sidebar-tagline {
-        font-size: 0.76rem;
-        color: #94a3b8;
-        margin-top: 8px;
-        margin-bottom: 2px;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        margin-bottom: 6px;
         padding-left: 2px;
-        font-family: 'Plus Jakarta Sans', sans-serif;
     }
 
     /* Navigation Buttons Container */
     section[data-testid="stSidebar"] .stButton {
-        margin-bottom: 6px !important;
+        margin-bottom: 3px !important;
     }
     section[data-testid="stSidebar"] .stButton > button {
         width: 100% !important;
         text-align: left !important;
         justify-content: flex-start !important;
-        padding: 11px 14px !important;
-        font-size: 0.86rem !important;
+        padding: 8px 12px !important;
+        font-size: 0.82rem !important;
         font-family: 'Space Grotesk', sans-serif !important;
         font-weight: 600 !important;
         letter-spacing: 0.2px !important;
-        border-radius: 9px !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 8px !important;
+        border-radius: 6px !important;
+        transition: all 0.18s ease !important;
+        min-height: 36px !important;
+        line-height: 1.2 !important;
     }
 
-    /* Inactive Nav Button (kind=secondary) */
+    /* Inactive Nav Button */
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"],
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
-        background: rgba(15, 23, 42, 0.65) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        background: rgba(15, 23, 42, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06) !important;
         color: #94a3b8 !important;
         box-shadow: none !important;
     }
     section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
-        background: rgba(30, 41, 59, 0.85) !important;
-        border-color: rgba(56, 189, 248, 0.45) !important;
+        background: rgba(30, 41, 59, 0.8) !important;
+        border-color: rgba(56, 189, 248, 0.4) !important;
         color: #f8fafc !important;
-        transform: translateX(4px) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+        transform: translateX(3px) !important;
     }
 
-    /* Active Nav Button (kind=primary) */
+    /* Active Nav Button */
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: linear-gradient(90deg, rgba(2, 132, 199, 0.35) 0%, rgba(14, 165, 233, 0.12) 100%) !important;
+        background: linear-gradient(90deg, rgba(2, 132, 199, 0.3) 0%, rgba(14, 165, 233, 0.1) 100%) !important;
         border: 1px solid #00f2fe !important;
-        border-left: 4px solid #00f2fe !important;
+        border-left: 3px solid #00f2fe !important;
         color: #00f2fe !important;
         font-weight: 700 !important;
-        box-shadow: 0 0 16px rgba(0, 242, 254, 0.25) !important;
+        box-shadow: 0 0 12px rgba(0, 242, 254, 0.2) !important;
         transform: translateX(2px) !important;
     }
 
-    /* Hardware Telemetry Card */
-    .sidebar-telemetry-card {
+    /* Compact Telemetry Micro-Card */
+    .sidebar-telemetry-compact {
         background: linear-gradient(145deg, rgba(15, 23, 42, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 11px;
-        padding: 13px 14px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(56, 189, 248, 0.18);
+        border-radius: 8px;
+        padding: 9px 11px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
     }
-    .telemetry-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    .telem-header {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.72rem;
+        font-size: 0.66rem;
         font-weight: 700;
         color: #38bdf8;
         letter-spacing: 0.8px;
-        margin-bottom: 9px;
-        padding-bottom: 6px;
+        margin-bottom: 6px;
+        padding-bottom: 4px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
-    .telemetry-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
+    .telem-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
     }
-    .telemetry-row {
+    .telem-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 0.78rem;
+        font-size: 0.72rem;
         font-family: 'JetBrains Mono', monospace;
     }
-    .telemetry-k {
-        color: #94a3b8;
+    .telem-item .k {
+        color: #64748b;
     }
-    .telemetry-v {
-        color: #f1f5f9;
+    .telem-item .v {
+        color: #cbd5e1;
         font-weight: 600;
-        background: rgba(30, 41, 59, 0.6);
-        padding: 2px 7px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        font-size: 0.74rem;
+        background: rgba(30, 41, 59, 0.5);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 0.68rem;
     }
-    .telemetry-v.emerald {
+    .telem-item .v.emerald {
         color: #10b981;
-        border-color: rgba(16, 185, 129, 0.35);
-        background: rgba(16, 185, 129, 0.12);
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
     }
-    .telemetry-v.cyan {
+    .telem-item .v.cyan {
         color: #00f2fe;
-        border-color: rgba(0, 242, 254, 0.35);
-        background: rgba(0, 242, 254, 0.12);
+        background: rgba(0, 242, 254, 0.1);
+        border: 1px solid rgba(0, 242, 254, 0.3);
     }
 
-    /* Sidebar Footer */
-    .sidebar-footer {
-        padding: 10px 4px 2px 4px;
-        text-align: center;
-    }
-    .sidebar-footer-text {
-        font-size: 0.73rem;
+    /* Minimal Footer */
+    .sidebar-footer-minimal {
+        padding: 8px 2px 2px 2px;
+        font-size: 0.68rem;
         color: #64748b;
-        line-height: 1.4;
+        text-align: center;
         font-family: 'JetBrains Mono', monospace;
     }
 
     /* Executive Callout Boxes */
     .callout-card {
         background: rgba(15, 23, 42, 0.7);
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 14px;
-        border-left: 4px solid #0284c7;
+        border-radius: 9px;
+        padding: 15px 18px;
+        margin-bottom: 12px;
+        border-left: 3px solid #0284c7;
     }
     .callout-success {
         border-left-color: #10b981;
@@ -579,7 +586,7 @@ st.markdown(
         background: rgba(239, 68, 68, 0.05);
     }
     .callout-title {
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         font-weight: 700;
         margin-bottom: 4px;
         color: #f8fafc;
@@ -588,7 +595,7 @@ st.markdown(
         gap: 8px;
     }
     .callout-body {
-        font-size: 0.86rem;
+        font-size: 0.84rem;
         color: #94a3b8;
         line-height: 1.5;
     }
@@ -681,16 +688,14 @@ def get_preview_media(target_path: str, selected_file_name: str) -> tuple[bytes 
     """
     target_p = Path(target_path).resolve()
     stem = Path(selected_file_name).stem
-    # Check for fast web preview clip in samples/previews/
     preview_file = Path("samples/previews") / f"{stem}_preview.mp4"
     if preview_file.exists():
         try:
             with open(preview_file, "rb") as f:
-                return f.read(), f"Full Duration Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB • Instant Playback)"
+                return f.read(), f"Full Duration Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB)"
         except Exception:
             pass
 
-    # For uploaded or smaller videos (< 150MB)
     if target_p.exists():
         sz = target_p.stat().st_size
         if sz <= 150 * 1024 * 1024:
@@ -700,7 +705,7 @@ def get_preview_media(target_path: str, selected_file_name: str) -> tuple[bytes 
             except Exception as e:
                 return None, f"Error: {e}"
         else:
-            return None, f"Ultra-HD 4K Raw Feed ({sz / (1024**3):.2f} GB). Ready for deep learning inference."
+            return None, f"Ultra-HD 4K Raw Feed ({sz / (1024**3):.2f} GB). Ready for GPU inference."
     return None, "Video file not found."
 
 
@@ -718,16 +723,16 @@ def load_benchmark_data() -> dict:
 
 
 # ----------------------------------------------------------------------------
-# Sidebar Navigation (EXACT 7 SECTIONS AS REQUIRED BY RUBRIC)
+# Sidebar Navigation (Minimalist, Zero-Scroll, 7 Rubric Sections)
 # ----------------------------------------------------------------------------
 NAV_SECTIONS = [
-    {"id": "Team", "num": "01", "icon": "👥", "title": "Engineering Squad"},
-    {"id": "Problem and Approach", "num": "02", "icon": "🏗️", "title": "Problem & Approach"},
-    {"id": "EDA of sample videos", "num": "03", "icon": "📊", "title": "EDA of Sample Videos"},
-    {"id": "Results on sample videos", "num": "04", "icon": "🏆", "title": "Benchmark Results"},
-    {"id": "Live Demo", "num": "05", "icon": "⚡", "title": "Live Demo Console"},
-    {"id": "Report", "num": "06", "icon": "📄", "title": "Executive Report"},
-    {"id": "Links", "num": "07", "icon": "🔗", "title": "Repository & Weights"},
+    {"id": "Team", "num": "01", "title": "Engineering Squad"},
+    {"id": "Problem and Approach", "num": "02", "title": "Problem & Approach"},
+    {"id": "EDA of sample videos", "num": "03", "title": "EDA Analytics"},
+    {"id": "Results on sample videos", "num": "04", "title": "Benchmark Results"},
+    {"id": "Live Demo", "num": "05", "title": "Live Console"},
+    {"id": "Report", "num": "06", "title": "Executive Report"},
+    {"id": "Links", "num": "07", "title": "Repository & Artifacts"},
 ]
 
 if "selected_section" not in st.session_state:
@@ -736,26 +741,23 @@ if "selected_section" not in st.session_state:
 with st.sidebar:
     st.markdown(
         """
-        <div class="sidebar-brand-card">
-            <div class="brand-icon-box">🚦</div>
-            <div style="flex: 1;">
-                <div class="brand-title">TRAFFIC AI</div>
-                <div class="brand-sub">CONTROL CONSOLE</div>
+        <div class="sidebar-brand-minimal">
+            <div class="brand-left">
+                <span class="brand-dot"></span>
+                <span class="brand-title">TRAFFIC <span class="brand-highlight">AI</span></span>
             </div>
-            <div class="status-badge-live" style="padding: 3px 8px; font-size: 0.68rem;">
-                <span class="status-dot"></span>SYS LIVE
-            </div>
+            <span class="brand-status-tag">ONLINE</span>
         </div>
-        <div class="sidebar-tagline">WIUT AI Hackathon 2026 • Computer Vision Track</div>
+        <div class="sidebar-subtext">WIUT AI Hackathon 2026 // CV Track</div>
         <div class="sidebar-divider"></div>
-        <div class="sidebar-section-label">SYSTEM NAVIGATION</div>
+        <div class="sidebar-section-label">NAVIGATION</div>
         """,
         unsafe_allow_html=True,
     )
 
     for item in NAV_SECTIONS:
         is_active = (st.session_state["selected_section"] == item["id"])
-        btn_label = f"{item['icon']}  {item['num']} // {item['title']}"
+        btn_label = f"{item['num']}  {item['title']}"
         if st.button(
             btn_label,
             key=f"nav_btn_{item['id']}",
@@ -768,43 +770,18 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-divider"></div>
-        <div class="sidebar-telemetry-card">
-            <div class="telemetry-header">
-                <span>⚡ HARDWARE TELEMETRY</span>
-                <span class="status-dot"></span>
-            </div>
-            <div class="telemetry-grid">
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Primary:</span>
-                    <span class="telemetry-v">YOLO11 Large</span>
-                </div>
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Anomaly:</span>
-                    <span class="telemetry-v">YOLOv8x Crash</span>
-                </div>
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Tracker:</span>
-                    <span class="telemetry-v">ByteTrack Causal</span>
-                </div>
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Inference:</span>
-                    <span class="telemetry-v emerald">RTX 3050 GPU</span>
-                </div>
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Seed Lock:</span>
-                    <span class="telemetry-v cyan">42 (Deterministic)</span>
-                </div>
-                <div class="telemetry-row">
-                    <span class="telemetry-k">Max Upload:</span>
-                    <span class="telemetry-v">10 GB Enabled</span>
-                </div>
+        <div class="sidebar-telemetry-compact">
+            <div class="telem-header">RUNTIME SPECS</div>
+            <div class="telem-grid">
+                <div class="telem-item"><span class="k">DET</span><span class="v">YOLO11L</span></div>
+                <div class="telem-item"><span class="k">ANOM</span><span class="v">YOLOv8x</span></div>
+                <div class="telem-item"><span class="k">TRACK</span><span class="v">ByteTrack</span></div>
+                <div class="telem-item"><span class="k">GPU</span><span class="v emerald">RTX 3050</span></div>
+                <div class="telem-item"><span class="k">SEED</span><span class="v cyan">42</span></div>
+                <div class="telem-item"><span class="k">MAX</span><span class="v">10 GB</span></div>
             </div>
         </div>
-        <div class="sidebar-footer">
-            <div class="sidebar-footer-text">
-                Automated Incident Detection & Causal Anticipation Engine
-            </div>
-        </div>
+        <div class="sidebar-footer-minimal">v2.4 • Deterministic Evaluation</div>
         """,
         unsafe_allow_html=True,
     )
@@ -839,7 +816,7 @@ if selected_section == "Team":
             """
             <div class="team-badge-card">
                 <div class="team-avatar-ring">
-                    <div class="team-avatar-inner">👨‍💻</div>
+                    <div class="mono-avatar">CV</div>
                 </div>
                 <div class="team-name">Lead CV Engineer</div>
                 <div class="team-role-pill">PERCEPTION & GEOMETRY</div>
@@ -866,7 +843,7 @@ if selected_section == "Team":
             """
             <div class="team-badge-card">
                 <div class="team-avatar-ring">
-                    <div class="team-avatar-inner">🧠</div>
+                    <div class="mono-avatar">DL</div>
                 </div>
                 <div class="team-name">ML & Anomaly Specialist</div>
                 <div class="team-role-pill">DEEP LEARNING & RISK</div>
@@ -893,7 +870,7 @@ if selected_section == "Team":
             """
             <div class="team-badge-card">
                 <div class="team-avatar-ring">
-                    <div class="team-avatar-inner">⚡</div>
+                    <div class="mono-avatar">SYS</div>
                 </div>
                 <div class="team-name">Full-Stack AI Engineer</div>
                 <div class="team-role-pill">SYSTEMS & PIPELINE</div>
@@ -915,14 +892,14 @@ if selected_section == "Team":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-    st.markdown("### 🏆 Core Architectural Disciplines")
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("### Core Architectural Disciplines")
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(
             """
             <div class="callout-card">
-                <div class="callout-title">📐 Perception & Spatial Geometry</div>
+                <div class="callout-title">Perception & Spatial Geometry</div>
                 <div class="callout-body">Vectorized polygon triggers, trajectory displacement vectors, and dual-band HSV red light segmentation.</div>
             </div>
             """,
@@ -932,7 +909,7 @@ if selected_section == "Team":
         st.markdown(
             """
             <div class="callout-card callout-success">
-                <div class="callout-title">🤖 Deep Learning & Risk Modeling</div>
+                <div class="callout-title">Deep Learning & Risk Modeling</div>
                 <div class="callout-body">Physical collision classification, Time-to-Collision proxies, and exponential risk smoothing without future frame leakage.</div>
             </div>
             """,
@@ -942,7 +919,7 @@ if selected_section == "Team":
         st.markdown(
             """
             <div class="callout-card callout-warning">
-                <div class="callout-title">⚡ High-Performance Computing</div>
+                <div class="callout-title">High-Performance Computing</div>
                 <div class="callout-body">FP16 CUDA acceleration, ~28 FPS processing on 4K footage, and official evaluation harness compliance.</div>
             </div>
             """,
@@ -973,8 +950,8 @@ elif selected_section == "Problem and Approach":
     st.markdown(
         """
         <div class="glass-panel">
-            <div style="font-size: 1.05rem; font-weight: 600; color: #f8fafc; margin-bottom: 6px;">🎯 Challenge Definition</div>
-            <div style="color: #94a3b8; font-size: 0.92rem; line-height: 1.6;">
+            <div style="font-size: 1.02rem; font-weight: 600; color: #f8fafc; margin-bottom: 5px;">Challenge Definition</div>
+            <div style="color: #94a3b8; font-size: 0.9rem; line-height: 1.6;">
                 Fixed intersection surveillance cameras experience diverse hazard scenarios across fluctuating daylight and evening conditions. 
                 The system must detect <b>14 official event classes</b> (Part A) and output an <b>anticipatory causal risk score</b> P(t) in [0, 1] 
                 (Part B) operating strictly under a <b>3.0x video duration budget</b>.
@@ -984,7 +961,7 @@ elif selected_section == "Problem and Approach":
         unsafe_allow_html=True,
     )
 
-    approach_tabs = st.tabs(["🏗️ End-to-End Pipeline Dataflow", "📐 10 Rule-Based Classes & Spatial Matrix", "🤖 Learned Models & Anti-Jitter Part B"])
+    approach_tabs = st.tabs(["Pipeline Architecture Dataflow", "21-Zone Spatial Rules Matrix", "Learned Models & Anti-Jitter Part B"])
 
     with approach_tabs[0]:
         st.markdown("#### Complete End-to-End System Pipeline")
@@ -1043,7 +1020,7 @@ elif selected_section == "Problem and Approach":
             st.markdown(
                 """
                 <div class="callout-card callout-success">
-                    <div class="callout-title">💥 Physical Accident & Fire/Smoke Detection</div>
+                    <div class="callout-title">Physical Accident & Fire/Smoke Detection</div>
                     <div class="callout-body">
                         Non-linear physical collisions and vehicle fires cannot be solved by 2D bounding box geometry alone.<br><br>
                         • <b>Model</b>: Secondary <code>YOLOv8x Anomaly</code> (<code>weights/accident_model.pt</code>)<br>
@@ -1058,7 +1035,7 @@ elif selected_section == "Problem and Approach":
             st.markdown(
                 """
                 <div class="callout-card">
-                    <div class="callout-title">📈 Part B: Causal Risk Estimator & Anti-Jitter</div>
+                    <div class="callout-title">Part B: Causal Risk Estimator & Anti-Jitter</div>
                     <div class="callout-body">
                         The causal risk score <i>P(t) ∈ [0, 1]</i> predicts accident likelihood without any future lookahead.<br><br>
                         • <b>Pairwise TTC Proxies</b>: Evaluates bounding box IoU (> 0.6) and centroid proximity (< 40 px in 640p).<br>
@@ -1122,8 +1099,8 @@ elif selected_section == "EDA of sample videos":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    st.markdown("### 📹 Video Stream Metadata & Calibration Offsets")
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+    st.markdown("### Video Stream Metadata & Calibration Offsets")
     video_stats = pd.DataFrame({
         "Video ID": ["C3896.MP4", "C3897.MP4", "C3902.MP4", "C3905.MP4"],
         "Resolution": ["3840 x 2160 (4K)", "3840 x 2160 (4K)", "3840 x 2160 (4K)", "3840 x 2160 (4K)"],
@@ -1136,17 +1113,17 @@ elif selected_section == "EDA of sample videos":
     })
     st.dataframe(video_stats, use_container_width=True)
 
-    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### 🚗 Road User Class Distribution")
+        st.markdown("#### Road User Class Distribution")
         object_counts = pd.DataFrame({
             "Instances": [4850, 1420, 890, 420, 310, 195],
         }, index=["Cars", "Pedestrians", "Buses", "Trucks", "Motorcycles", "Bicycles"])
         st.bar_chart(object_counts)
 
     with c2:
-        st.markdown("#### 📈 Traffic Density Curves (Vehicles / Minute)")
+        st.markdown("#### Traffic Density Curves (Vehicles / Minute)")
         density_df = pd.DataFrame({
             "Lane Left-to-Right": [45, 52, 60, 68, 75, 88, 80, 72, 64, 55, 48, 42],
             "Lane Right-to-Left": [38, 41, 48, 56, 68, 80, 85, 76, 62, 50, 44, 39],
@@ -1158,7 +1135,7 @@ elif selected_section == "EDA of sample videos":
         st.markdown(
             """
             <div class="callout-card">
-                <div class="callout-title">🗺️ Intersection Flow Dynamics</div>
+                <div class="callout-title">Intersection Flow Dynamics</div>
                 <div class="callout-body">
                     • <b>Primary Corridor</b>: East-to-West straight channel carries 82% of vehicle flow.<br>
                     • <b>Secondary Slipway</b>: Southbound right-turn channel accounts for 14% of turns.<br>
@@ -1172,7 +1149,7 @@ elif selected_section == "EDA of sample videos":
         st.markdown(
             """
             <div class="callout-card callout-warning">
-                <div class="callout-title">🚦 Signal Phase & Stop Line Infractions</div>
+                <div class="callout-title">Signal Phase & Stop Line Infractions</div>
                 <div class="callout-body">
                     • <b>Average Red Phase</b>: 45.0 seconds | <b>Green Phase</b>: 65.0 seconds.<br>
                     • <b>Critical Risk Window</b>: 88% of stop line crossings occur during the first 3.5 seconds of red phase initiation.<br>
@@ -1207,7 +1184,6 @@ elif selected_section == "Results on sample videos":
     benchmark_data = load_benchmark_data()
     videos_dict = benchmark_data.get("videos", {})
 
-    # Top KPI strip
     total_evs = sum(len(v.get("events", [])) for v in videos_dict.values()) if videos_dict else 290
     m1, m2, m3, m4 = st.columns(4)
     with m1:
@@ -1239,8 +1215,8 @@ elif selected_section == "Results on sample videos":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
-    st.markdown("### 📋 Per-Video Benchmark Breakdown")
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+    st.markdown("### Per-Video Benchmark Breakdown")
     benchmark_table = pd.DataFrame({
         "Video ID": ["C3896.MP4", "C3897.MP4", "C3902.MP4", "C3905.MP4"],
         "Duration": ["340.3 s", "317.8 s", "317.8 s", "127.6 s"],
@@ -1258,8 +1234,8 @@ elif selected_section == "Results on sample videos":
     })
     st.dataframe(benchmark_table, use_container_width=True)
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("### 🔍 Interactive Feed Inspector")
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+    st.markdown("### Interactive Feed Inspector")
 
     feed_choice = st.selectbox(
         "Select Benchmark Video Feed to Inspect:",
@@ -1268,7 +1244,7 @@ elif selected_section == "Results on sample videos":
     feed_key = feed_choice.split()[0]
     feed_path = f"samples/{feed_key}"
 
-    insp_tab1, insp_tab2, insp_tab3 = st.tabs(["🎬 Video Playback & Geometry", "📋 Detected Events Timeline", "📈 Causal Risk Curve P(t)"])
+    insp_tab1, insp_tab2, insp_tab3 = st.tabs(["Stream Playback & Map", "Detected Events Timeline", "Causal Risk Curve P(t)"])
 
     with insp_tab1:
         f_col1, f_col2 = st.columns(2)
@@ -1306,7 +1282,6 @@ elif selected_section == "Results on sample videos":
     with insp_tab3:
         feed_risks = videos_dict.get(feed_key, {}).get("risk", [])
         if feed_risks:
-            # Downsample by factor of 10 for fast web chart rendering
             sampled_risks = feed_risks[::10]
             chart_df = pd.DataFrame({
                 "Accident Risk P(t)": [round(pt[1], 4) for pt in sampled_risks],
@@ -1318,14 +1293,14 @@ elif selected_section == "Results on sample videos":
         else:
             st.info(f"Risk data not available for {feed_key}.")
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown("### ⚠️ Honest Failure Cases & Edge Analyses (Rubric Mandated)")
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+    st.markdown("### Honest Failure Cases & Edge Analyses")
     fail_c1, fail_c2, fail_c3 = st.columns(3)
     with fail_c1:
         st.markdown(
             """
             <div class="callout-card callout-warning">
-                <div class="callout-title">🌅 Evening Color Desaturation (C3902)</div>
+                <div class="callout-title">Case 01: Evening Color Desaturation (C3902)</div>
                 <div class="callout-body">
                     <b>Observed Failure</b>: Overexposed setting sun bleached red traffic LEDs into white-orange hue, causing missed stop-line infractions.<br><br>
                     <b>Root Cause</b>: Default HSV red hue bounds (0-10 & 170-180) failed on washed-out pixels.<br><br>
@@ -1339,7 +1314,7 @@ elif selected_section == "Results on sample videos":
         st.markdown(
             """
             <div class="callout-card callout-danger">
-                <div class="callout-title">💨 Wind-Induced Camera Shift (C3902)</div>
+                <div class="callout-title">Case 02: Wind-Induced Camera Shift (C3902)</div>
                 <div class="callout-body">
                     <b>Observed Failure</b>: Camera mount experienced a (-94, +37) pixel physical displacement, misaligning all 21 zones.<br><br>
                     <b>Root Cause</b>: Static pixel coordinates are fragile to pole vibrations and camera readjustments.<br><br>
@@ -1353,7 +1328,7 @@ elif selected_section == "Results on sample videos":
         st.markdown(
             """
             <div class="callout-card">
-                <div class="callout-title">🚛 Heavy Vehicle Occlusion</div>
+                <div class="callout-title">Case 03: Heavy Vehicle Occlusion</div>
                 <div class="callout-body">
                     <b>Observed Failure</b>: Passing double-axle trucks occluded trailing sedans, creating brief ByteTrack ID switches.<br><br>
                     <b>Root Cause</b>: Pure visual IoU loses tracks during multi-second complete visual occlusions.<br><br>
@@ -1390,7 +1365,7 @@ elif selected_section == "Live Demo":
     display_name = ""
 
     with demo_c1:
-        st.markdown("#### 1. Video Source Selection")
+        st.markdown("#### 1. Source Selection")
         input_choice = st.radio(
             "Choose Video Source:",
             ["Select Pre-loaded Benchmark Sample", "Upload Custom Surveillance Video (.mp4)"],
@@ -1453,8 +1428,8 @@ elif selected_section == "Live Demo":
             if meta:
                 st.markdown(
                     f"""
-                    <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px 16px; margin-top: 14px; font-size: 0.84rem; line-height: 1.6; font-family: 'JetBrains Mono', monospace;">
-                        <span style="color:#00f2fe; font-weight:700;">📐 STREAM TELEMETRY</span><br>
+                    <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 0.82rem; line-height: 1.6; font-family: 'JetBrains Mono', monospace;">
+                        <span style="color:#00f2fe; font-weight:700;">STREAM TELEMETRY</span><br>
                         <span style="color:#94a3b8;">Resolution:</span> <b>{meta.get('resolution')}</b> &nbsp;|&nbsp; 
                         <span style="color:#94a3b8;">Framerate:</span> <b>{meta.get('fps')} FPS</b><br>
                         <span style="color:#94a3b8;">Duration:</span> <b>{meta.get('duration_sec')}s ({meta.get('total_frames')} frames)</b> &nbsp;|&nbsp; 
@@ -1465,9 +1440,9 @@ elif selected_section == "Live Demo":
                 )
 
     with demo_c2:
-        st.markdown("#### 2. Video Player & Spatial Geometry")
+        st.markdown("#### 2. Video Stream & Geometry Map")
         if target_video_path is not None and Path(target_video_path).exists():
-            preview_tabs = st.tabs(["🎬 Live Video Stream", "🗺️ 21-Zone Geometric Map"])
+            preview_tabs = st.tabs(["Video Stream", "21-Zone Geometric Map"])
 
             with preview_tabs[0]:
                 preview_bytes, preview_status = get_preview_media(target_video_path, display_name)
@@ -1475,7 +1450,7 @@ elif selected_section == "Live Demo":
                     st.video(preview_bytes)
                     st.caption(f"Active Stream: `{display_name}` • {preview_status}")
                 else:
-                    st.info(f"📹 {preview_status}")
+                    st.info(f"{preview_status}")
 
             with preview_tabs[1]:
                 zone_vis = render_zone_overlay(target_video_path)
@@ -1486,13 +1461,13 @@ elif selected_section == "Live Demo":
         else:
             st.info("Upload an MP4 file or select a pre-loaded sample above to activate preview.")
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
     st.markdown("#### 3. Execution Pipeline")
 
     if target_video_path is not None:
-        run_btn = st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
+        run_btn = st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True)
     else:
-        st.button("🚀 Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
+        st.button("Execute AI Event Detection & Risk Estimator", type="primary", use_container_width=True, disabled=True)
         st.info("Select a pre-loaded sample video or upload an MP4 feed above to enable execution.")
         run_btn = False
 
@@ -1512,7 +1487,7 @@ elif selected_section == "Live Demo":
             elapsed = time.time() - start_time
             fps = (current / elapsed) if elapsed > 0 else 0.0
             eta = ((total - current) / fps) if fps > 0 else 0.0
-            status_text.markdown(f"⏳ Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
+            status_text.markdown(f"Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
 
         try:
             # Part A: Event Detection (Full Video Stream)
@@ -1522,7 +1497,7 @@ elif selected_section == "Live Demo":
             st.stop()
 
         # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
-        status_text.markdown("⚡ Initializing Causal Risk Estimator (Part B)...")
+        status_text.markdown("Initializing Causal Risk Estimator (Part B)...")
         start_time_b = time.time()
 
         cap = cv2.VideoCapture(str(target_resolved))
@@ -1566,7 +1541,7 @@ elif selected_section == "Live Demo":
                         progress_bar.progress(min(overall_pct, 1.0))
                         elapsed_b = time.time() - start_time_b
                         fps_b = (frame_idx / elapsed_b) if elapsed_b > 0 else 0.0
-                        status_text.markdown(f"⏳ Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed Time: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
+                        status_text.markdown(f"Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
                 frame_idx += 1
         except Exception as e:
             st.error(f"Error during Part B Risk Estimation: {e}")
@@ -1576,7 +1551,7 @@ elif selected_section == "Live Demo":
 
             total_elapsed = time.time() - start_time
             progress_bar.progress(1.0)
-            status_text.success(f"✅ Deep Learning Inference & Causal Risk Analysis Complete! Total Elapsed Time: {total_elapsed:.1f}s")
+            status_text.success(f"Inference Complete. Total Elapsed Time: {total_elapsed:.1f}s")
 
             # Cache results in session state
             st.session_state["cached_video"] = target_video_path
@@ -1594,8 +1569,8 @@ elif selected_section == "Live Demo":
         total_elapsed = st.session_state.get("cached_elapsed", 0.0)
         cached_name = st.session_state.get("cached_display_name", display_name)
 
-        st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-        st.markdown("### 📊 Live Surveillance Telemetry")
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        st.markdown("### Live Surveillance Telemetry")
 
         # KPI metric cards
         k1, k2, k3, k4 = st.columns(4)
@@ -1629,8 +1604,8 @@ elif selected_section == "Live Demo":
                 unsafe_allow_html=True,
             )
 
-        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-        st.markdown("### 📋 Detected Traffic Violations & Events (Part A)")
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+        st.markdown("### Detected Traffic Violations & Events (Part A)")
         if events:
             df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Violation Label"])
             df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(3)
@@ -1641,10 +1616,9 @@ elif selected_section == "Live Demo":
 
             st.dataframe(filtered_df, use_container_width=True, height=280)
 
-            # Download Predictions Button
             export_payload = json.dumps({"events": events, "risk": list(zip(timestamps, risk_scores))}, indent=2)
             st.download_button(
-                label="📥 Export Predictions JSON (Official Hackathon Format)",
+                label="Export Predictions JSON (Official Hackathon Format)",
                 data=export_payload,
                 file_name=f"predictions_{Path(cached_name).stem}.json",
                 mime="application/json",
@@ -1652,8 +1626,8 @@ elif selected_section == "Live Demo":
         else:
             st.info("No traffic violations or incidents detected in this stream.")
 
-        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-        st.markdown("### 📈 Causal Accident Risk Curve with 0.50 Alarm Threshold (Part B)")
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+        st.markdown("### Causal Accident Risk Curve with 0.50 Alarm Threshold (Part B)")
         if risk_scores:
             df_risk = pd.DataFrame({
                 "Accident Risk P(t)": risk_scores,
@@ -1690,8 +1664,8 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card callout-success" style="min-height: 520px;">
-                <div class="callout-title" style="color: #10b981; font-size: 1.1rem;">✅ 1. What Worked</div>
-                <div class="callout-body" style="margin-top: 12px; font-size: 0.9rem;">
+                <div class="callout-title" style="color: #10b981; font-size: 1.05rem;">01. What Worked</div>
+                <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
                     <b>• 21-Zone Vectorized Spatial Geometry:</b><br>
                     Calibrating rigid polygonal coordinate boundaries for stop lines, travel lanes, pedestrian zebras, and concrete islands eliminated over 90% of false positives across complex intersection turns.<br><br>
                     <b>• YOLO Traffic Light AI Auto-Alignment (Frame 0):</b><br>
@@ -1710,8 +1684,8 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card callout-warning" style="min-height: 520px;">
-                <div class="callout-title" style="color: #f59e0b; font-size: 1.1rem;">⚠️ 2. What Didn't Work</div>
-                <div class="callout-body" style="margin-top: 12px; font-size: 0.9rem;">
+                <div class="callout-title" style="color: #f59e0b; font-size: 1.05rem;">02. What Didn't Work</div>
+                <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
                     <b>• Classical Homography & Template Matching:</b><br>
                     Automated template matching completely broke down when dynamic objects (passing double-decker buses, swaying trees) entered the anchor crop, causing massive +280px false shifts.<br><br>
                     <b>• Deprecated Inference Flags:</b><br>
@@ -1728,8 +1702,8 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card" style="min-height: 520px; border-left-color: #38bdf8;">
-                <div class="callout-title" style="color: #38bdf8; font-size: 1.1rem;">🚀 3. What We Would Do Next</div>
-                <div class="callout-body" style="margin-top: 12px; font-size: 0.9rem;">
+                <div class="callout-title" style="color: #38bdf8; font-size: 1.05rem;">03. What We Would Do Next</div>
+                <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
                     <b>• Spatio-Temporal Transformer Integration:</b><br>
                     Train a lightweight VideoMAE or SlowFast backbone specialized for localized Central Asian driving behaviors to anticipate near-misses 3+ seconds earlier.<br><br>
                     <b>• Predictive Trajectory Extrapolation (Kalman Filter):</b><br>
@@ -1742,7 +1716,7 @@ elif selected_section == "Report":
             unsafe_allow_html=True,
         )
 
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
     st.caption("Submitted for Westminster International University in Tashkent (WIUT) AI Hackathon 2026.")
 
 
@@ -1770,9 +1744,9 @@ elif selected_section == "Links":
     with c1:
         st.markdown(
             """
-            <div class="team-badge-card" style="text-align: left; padding: 22px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">📦 Public Git Repository</div>
-                <div style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+            <div class="team-badge-card" style="text-align: left; padding: 20px;">
+                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Public Git Repository</div>
+                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
                     • <b>Remote URL</b>: <a href="https://github.com/DeWeWO/wiut" target="_blank" style="color: #38bdf8;">github.com/DeWeWO/wiut</a><br>
                     • <b>Branch</b>: <code>master</code><br>
                     • <b>Reproducibility</b>: Deterministic seed locked (<code>seed=42</code>). Clean submission package.
@@ -1781,15 +1755,15 @@ elif selected_section == "Links":
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
         st.link_button("Open GitHub Repository", "https://github.com/DeWeWO/wiut", use_container_width=True)
 
     with c2:
         st.markdown(
             """
-            <div class="team-badge-card" style="text-align: left; padding: 22px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">⚖️ Model Weights</div>
-                <div style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+            <div class="team-badge-card" style="text-align: left; padding: 20px;">
+                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Model Weights</div>
+                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
                     • <b>Primary</b>: <code>weights/yolo11l.pt</code><br>
                     • <b>Anomaly</b>: <code>weights/accident_model.pt</code><br>
                     • <b>Estimator</b>: <code>weights/yolov8n.pt</code><br>
@@ -1803,9 +1777,9 @@ elif selected_section == "Links":
     with c3:
         st.markdown(
             """
-            <div class="team-badge-card" style="text-align: left; padding: 22px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">📊 Benchmark Predictions</div>
-                <div style="color: #94a3b8; font-size: 0.88rem; line-height: 1.6; margin-bottom: 16px;">
+            <div class="team-badge-card" style="text-align: left; padding: 20px;">
+                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Benchmark Predictions</div>
+                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
                     • <b>File</b>: <code>predictions_samples.json</code><br>
                     • <b>Harness</b>: <code>python evaluate.py --validate-only</code><br>
                     • <b>Score</b>: <code>0 errors, 0 warnings, 0 blips</code>.
@@ -1814,20 +1788,20 @@ elif selected_section == "Links":
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
         pred_p = Path("predictions_samples.json")
         if pred_p.exists():
             with open(pred_p, "rb") as f:
                 st.download_button(
-                    label="⬇️ Download predictions_samples.json",
+                    label="Download predictions_samples.json",
                     data=f.read(),
                     file_name="predictions_samples.json",
                     mime="application/json",
                     use_container_width=True,
                 )
 
-    st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-    st.markdown("#### 🔍 predictions_samples.json Telemetry Summary")
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("#### predictions_samples.json Telemetry Summary")
     pred_p = Path("predictions_samples.json")
     if pred_p.exists():
         with open(pred_p, "r") as f:
