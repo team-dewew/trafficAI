@@ -593,7 +593,7 @@ st.markdown(
     }
     
     [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
-        padding: 50px 20px 24px 20px !important;
+        padding: 10px 2px 0px 2px !important;
     }
 
     section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {

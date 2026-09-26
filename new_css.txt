@@ -1,0 +1,214 @@
+    /* =========================================================================
+       SIDEBAR: MODERN SLEEK NAV (PREMIUM)
+       ========================================================================= */
+    section[data-testid="stSidebar"] {
+        background: #030712 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
+        padding: 0 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 2px !important;
+    }
+
+    [data-testid="stSidebarHeader"] {
+        height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; display: none !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {
+        display: none !important;
+    }
+
+    section[data-testid="stSidebar"] .block-container {
+        padding: 24px 16px !important;
+    }
+
+    .sidebar-brand-minimal {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 4px;
+        margin-bottom: 8px;
+    }
+    .brand-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .brand-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #00f2fe;
+        box-shadow: 0 0 10px #00f2fe;
+    }
+    .brand-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #f8fafc;
+        letter-spacing: -0.3px;
+    }
+    .brand-highlight {
+        color: #00f2fe;
+    }
+    .brand-status-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.6rem;
+        font-weight: 700;
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 3px 6px;
+        border-radius: 4px;
+        letter-spacing: 0.5px;
+    }
+    
+    .sidebar-subtext {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: #64748b;
+        padding: 0 4px;
+        margin-bottom: 20px;
+    }
+
+    .sidebar-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        margin: 16px 0;
+        width: 100%;
+    }
+
+    .sidebar-section-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.64rem;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        padding-left: 8px;
+    }
+
+    section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.stButton) {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button {
+        width: 100% !important;
+        min-height: 40px !important;
+        height: 40px !important;
+        padding: 0 14px !important;
+        margin-bottom: 4px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        border-radius: 8px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 0.88rem !important;
+        font-weight: 500 !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border: 1px solid transparent !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+        color: #94a3b8 !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-color: rgba(255, 255, 255, 0.06) !important;
+        color: #f1f5f9 !important;
+        transform: translateX(2px) !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: linear-gradient(90deg, rgba(14, 165, 233, 0.15), transparent) !important;
+        border: 1px solid rgba(56, 189, 248, 0.2) !important;
+        border-left: 3px solid #00f2fe !important;
+        color: #38bdf8 !important;
+        font-weight: 600 !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button div {
+        display: flex !important; align-items: center !important; width: 100% !important; margin: 0 !important; padding: 0 !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button p {
+        margin: 0 !important; padding: 0 !important;
+    }
+
+    .sidebar-specs-card {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.4) 0%, rgba(10, 15, 28, 0.8) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 12px;
+    }
+    .specs-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.62rem;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 1.2px;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .specs-title::before {
+        content: ""; width: 4px; height: 4px; background: #38bdf8; border-radius: 50%;
+    }
+    .specs-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+    }
+    .specs-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    .specs-label {
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 500;
+    }
+    .specs-val {
+        color: #e2e8f0;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        font-size: 0.68rem;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 3px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .specs-val.emerald {
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.25);
+    }
+    .specs-val.cyan {
+        color: #00f2fe;
+        background: rgba(0, 242, 254, 0.1);
+        border-color: rgba(0, 242, 254, 0.25);
+    }
+
+    .sidebar-footer-minimal {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 0.65rem;
+        color: #475569;
+        text-align: center;
+        font-family: 'JetBrains Mono', monospace;
+        letter-spacing: 0.5px;
+    }
