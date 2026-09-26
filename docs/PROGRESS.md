@@ -67,3 +67,24 @@ A full install inside a clean Docker container was **not** run here, because the
 $ git diff --exit-code a76904e -- run_submission.py evaluate.py
 (no output)
 ```
+
+## Clean-clone check (what the organizers do)
+
+Fresh `git clone` of the submitted commit into an empty folder, then:
+
+```
+$ bash weights/download.sh
+yolo11l.pt: OK / yolov8n.pt: OK / accident_model.pt: OK / yolo11s.pt: OK   -> "Weights download completed."
+$ python run_submission.py --videos samples --out predictions.json
+C3896 14 events 1.13x | C3897 16 events 1.12x | C3902 24 events 1.16x | C3905 9 events 1.18x — all OK, 0 errors
+$ python evaluate.py --pred predictions.json --validate-only
+format: 4 video(s), 63 event(s), 0 error(s), 0 warning(s) -> VALID
+```
+
+- **Reproducibility:** every event (start, end, label) of all four videos is identical to the committed
+  `predictions_samples.json`, and the risk curves differ by 0.0.
+- **Offline:** the harness run with all HTTP(S) traffic routed to a dead proxy finished with no errors,
+  so nothing is downloaded at run time.
+- **Fixed during this check:** `weights/download.sh` failed its final checksum step when `SHA256SUMS` was
+  checked out with CRLF line endings (Windows `core.autocrlf`). The committed file is LF, so Linux was not
+  affected. The script now strips `\r` before `sha256sum -c`, and `.gitattributes` pins LF for it.
