@@ -10,4 +10,4 @@ echo "Evaluating against dev set labels..."
 python evaluate.py --pred predictions_samples.json --gt devset/labels.json --per-video --json devset/report.json
 
 echo "Summarizing results..."
-python src/devset/summarize.py
+python -m src.devset.summarize devset/report.json devset/REPORT.md

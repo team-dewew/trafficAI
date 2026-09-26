@@ -1,6 +1,5 @@
-import os
-import urllib.request
 import hashlib
+import urllib.request
 from pathlib import Path
 
 WEIGHTS_DIR = Path(__file__).resolve().parent
@@ -16,14 +15,14 @@ def verify_checksums():
     if not sums_file.exists():
         print("SHA256SUMS file not found, skipping verification.")
         return True
-    
+
     expected_sums = {}
     with open(sums_file, "r") as f:
         for line in f:
             parts = line.strip().split()
             if len(parts) >= 2:
                 expected_sums[parts[1]] = parts[0]
-                
+
     success = True
     for filename, expected in expected_sums.items():
         filepath = WEIGHTS_DIR / filename
@@ -31,20 +30,20 @@ def verify_checksums():
             print(f"Missing file: {filename}")
             success = False
             continue
-            
+
         print(f"Verifying {filename}...")
         sha256 = hashlib.sha256()
         with open(filepath, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 sha256.update(chunk)
-                
+
         actual = sha256.hexdigest()
         if actual != expected:
             print(f"Checksum mismatch for {filename}: expected {expected}, got {actual}")
             success = False
         else:
             print(f"{filename}: OK")
-            
+
     return success
 
 def download_files():

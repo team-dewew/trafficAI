@@ -1,151 +1,166 @@
-# Traffic AI — WIUT Hackathon 2026 (Computer Vision Track)
+# Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
 **Team: dewew**
 
-An intelligent, high-throughput traffic surveillance system combining State-of-the-Art Object Detection, dynamic AI auto-alignment, calibrated 21-zone geometric spatial reasoning, and deep anomaly detection for real-time event detection (Part A) and causal accident anticipation (Part B).
+The system watches a road-junction CCTV camera and does two things:
+
+- **Part A:** reports traffic events as `[start_sec, end_sec, label]` segments.
+- **Part B:** outputs a causal per-frame risk that an accident starts within 5 s.
 
 ---
 
-## Installation & Running
+## Install and run
 
-### Environment Setup
-Clone the repository and install the required dependencies (Python 3.10+):
+Python 3.10–3.12 with an NVIDIA GPU (a CPU works too, but is slow).
 
 ```bash
 pip install -r requirements.txt
+bash weights/download.sh          # once, with internet (Windows: python weights/download.py)
+python run_submission.py --videos /data/test --out predictions.json
+python evaluate.py --pred predictions.json --validate-only
 ```
 
-### Model Weights
-All three model weights are fetched with one command (run once, with internet, before evaluation):
+`weights/download.sh` fetches three files (≈190 MB total) and verifies them against `weights/SHA256SUMS`:
 
-```bash
-bash weights/download.sh
-```
+| file | what | source | licence |
+|---|---|---|---|
+| `yolo11l.pt` | road-user detector (Part A) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
+| `yolov8n.pt` | light detector (Part B) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
+| `accident_model.pt` | YOLOv8x crash-severity / fire / smoke detector | [Enos-123/accident-evaluator-yolov8x](https://huggingface.co/Enos-123/accident-evaluator-yolov8x), file `weights/epoch90.pt` | Ultralytics YOLOv8 fine-tune (AGPL-3.0). The training data of this checkpoint is not documented on its model card. |
 
-This downloads:
-- `weights/yolo11l.pt` (~50 MB): primary road user detector (YOLO11 Large, Ultralytics release)
-- `weights/yolov8n.pt` (~6 MB): lightweight Part B causal risk estimator (Ultralytics release)
-- `weights/accident_model.pt` (~131 MB): secondary YOLOv8x anomaly detector (Crash/Fire), fetched from Hugging Face [`Enos-123/accident-evaluator-yolov8x`](https://huggingface.co/Enos-123/accident-evaluator-yolov8x) (`weights/epoch90.pt`, renamed)
+After the download, nothing else is fetched: the code loads weights only from
+`weights/` and raises an error instead of downloading anything.
 
-Total ≈ 190 MB — far under the 5 GB limit.
+A `Dockerfile` (CUDA 12.4, Python 3.11) is also provided. Its header shows the build/run commands.
 
-### Running Submission
-To run inference over a folder of test videos using the official harness:
-
-```bash
-python run_submission.py --videos samples --out predictions_samples.json --team dewew
-```
-
-### Evaluating Format & Metric
-Run the official evaluation script to perform format validation or benchmark against ground truth:
-
-```bash
-# Format check only:
-python evaluate.py --pred predictions_samples.json --validate-only
-
-# Full evaluation against ground truth:
-python evaluate.py --pred predictions_samples.json --gt ground_truth.json --per-video
-```
-
-### Launching Team Web Application
-To start the interactive Streamlit dashboard:
-
-```bash
-streamlit run app.py
-```
+The website runs with `pip install -r requirements-web.txt && streamlit run app.py`.
 
 ---
 
-## Approach (Rule-based vs Learned)
+## Approach
 
-Our architecture employs a **Hybrid AI Pipeline** balancing deep perceptual understanding with rigid geometric spatial logic to remain within the hackathon's `3.0x` time budget while maximizing accuracy across all 14 traffic event classes:
+```
+video ─► scene registration (SIFT+RANSAC similarity vs. assets/scene_ref.jpg)
+      │        └► scene layout mapped onto this video: zones, stop lines, signal lamps
+      ├► signal state from the lamps (debounced)
+      ├► YOLO11-L @960, FP16, every 3rd frame ─► car/truck duplicate suppression ─► ByteTrack
+      │        └► track state: ground point, speed in body-diagonals / s
+      ├► YOLOv8x anomaly model at 1 Hz
+      └► rule engine (src/rules.py) ─► merge / clip / drop blips ─► events
+Part B: YOLOv8n every 3rd frame ─► ByteTrack ─► time-to-collision on collision courses ─► EMA ─► risk
+```
 
-### 1. Rule-Based Events (21-Zone Geometric Coordinate Map)
-The following 11 classes are governed by deterministic spatial-temporal rules evaluated over a calibrated 21-zone polygon layout (stop lines, lane corridors, crosswalks, concrete islands, sidewalks, intersection core), combined with ByteTrack trajectory analysis:
+**Learned** (off-the-shelf open weights; we trained nothing): YOLO11-L and YOLOv8n (COCO detectors), and the YOLOv8x crash/fire model.
+**Rule-based**: scene registration, signal read-out, every event rule, post-processing and the Part B risk score.
 
-- `jaywalking`: Pedestrian detections entering the roadway corridor outside designated crosswalk polygons.
-- `red_light`: Vehicles crossing the primary stop line (`stop_line_red`) while the calibrated signal bbox detects an active red light.
-- `stop_line`: Vehicles stopping past the stop line on red without entering the intersection.
-- `failure_to_yield`: Vehicles crossing pedestrian yield lines while pedestrian tracks occupy active crosswalk zones.
-- `wrong_way`: Vehicles whose displacement trajectory opposes the designated vector flow of `lane_ltr` or `lane_rtl`.
-- `solid_line_crossing`: Maneuvers crossing solid division markings between adjacent travel lanes.
-- `stopped_vehicle`: Stationary vehicles on the carriageway for ≥ 10 seconds outside of signalized queues.
-- `illegal_turn`: Turns executed from unauthorized lanes or violating intersection turn boundaries.
-- `illegal_u_turn`: Sharp trajectory reversals inside prohibited intersection zones.
-- `congestion`: Widespread standstill or crawling vehicular traffic across all lanes simultaneously.
-- `road_obstacle`: Stationary debris, dropped cargo, or domestic animals detected on the carriageway for ≥ 1.0 s.
-- `near_miss`: Scale-aware pairwise proximity analysis — two vehicles closing to < 0.85× their combined bounding-box diagonal while at least one exhibits hard braking (> 55% speed drop within ~0.5 s), with no bounding-box contact (IoU < 0.03, otherwise it is `accident` territory).
+Key design points:
 
-### 2. Learned Events (Secondary YOLOv8x Anomaly Model)
-Complex physical collisions and fire hazards cannot be captured by rigid spatial rules alone. These classes are detected using a specialized secondary deep learning model (`weights/accident_model.pt`, evaluated every 5th frame):
+- **The camera pose drifts between recordings.** Relative to the reference frame (C3905), C3902 is shifted by (−91, +28) px, and C3896/C3897 are rotated by ~1° and scaled by 0.986. Each video is registered once at start-up, and the transform is applied to all zones. See `docs/scene.md`.
+- **The signal is read from its lamps.** A lit lamp is ~5 px tall at 4K, so we measure colour in small windows at the calibrated lamp centres. On all four samples this gives a clean cycle of ~37 s red, ~35 s green and 3–6 s amber/transition (`scripts/signal_timeline.py`).
+- **Speeds are scale-free**, measured in body-diagonals per second of the track's ground point. The same threshold then works near and far from the camera, and at any resolution.
+- **Part B** scores time-to-collision only for pairs on a real collision course: closest approach < 0.3 of their size, held for 2 updates. Duplicate boxes are merged, far-field objects and far-carriageway pairs are skipped (image-space geometry is too compressed there), and same-direction pairs count only as fast rear-end closings. On the samples, which contain no crashes, the score is ≥ 0.5 in under 0.5 % of frames. An earlier version was ≥ 0.5 in 36–60 % of frames because of duplicate boxes and perspective convergence.
+- **Class policy.** `illegal_turn`, `illegal_u_turn` and `solid_line_crossing` are switched off: we do not have the permitted-manoeuvre map or the solid-line geometry, and a class predicted but absent from the test set costs macro-F1. The rule for each class and the reasoning are in `docs/class_policy.md`. All thresholds are in `src/config.py`.
 
-- `accident`: Dynamic detection of vehicle-to-vehicle collisions, rollovers, and structural crashes.
-- `fire_smoke`: Detection of active vehicle combustion, open flames, and dense smoke plumes.
+### How the rules were tuned
 
-### 3. Causal Accident Anticipation (Part B — `RiskEstimator`)
-Estimates P(accident starts within 5 s) causally frame-by-frame:
-- Employs a lightweight YOLOv8n detector with ByteTrack association evaluated every 3rd frame.
-- **Scale-aware Time-to-Collision proxy**: vehicle pairs closing to < 0.75–0.95× their combined diagonal with measurable approach speed (> 1.5–2.5 px/frame at 640p scale) and frame-over-frame distance shrinkage.
-- **Pedestrian–vehicle conflict**: pedestrians on the carriageway (zone-accurate, reusing the Part A polygons) only raise risk when a genuinely moving vehicle bears down on them — avoiding a constant risk floor in this busy intersection.
-- Smooths output probabilities with an exponential moving average (α = 0.45), guaranteeing zero future-frame data leakage. The estimator never opens the video file.
+We have no hand-labelled dev set yet. Instead, perception output was cached once
+(`scripts/replay_rules.py cache ...`) and the rules were replayed in seconds. We then
+rendered every candidate event of every class as a frame montage with the
+involved tracks highlighted, and inspected it. This exposed the false-positive
+patterns that each rule now excludes:
+
+- motorcycle riders taken as pedestrians;
+- people waiting at the kerb inside a zebra polygon;
+- red-light queues taken as congestion or stopped vehicles;
+- parked cars;
+- vehicles waiting to turn inside the junction.
 
 ---
 
-## Models & Data Sources
+## Results on the sample videos
 
-| Component | Source | License |
-|---|---|---|
-| `yolo11l.pt` (primary detector) | Ultralytics YOLO11 official release, pre-trained on COCO | AGPL-3.0 |
-| `yolov8n.pt` (risk estimator) | Ultralytics YOLOv8 official release, pre-trained on COCO | AGPL-3.0 |
-| `accident_model.pt` (anomaly detector) | [`Enos-123/accident-evaluator-yolov8x`](https://huggingface.co/Enos-123/accident-evaluator-yolov8x) on Hugging Face (YOLOv8x fine-tuned for crash/fire detection), open weights | AGPL-3.0 (Ultralytics) |
-| Tracker | ByteTrack via `supervision` | MIT |
+`predictions_samples.json` is our output on the four samples, produced by the command above.
 
-No paid or closed API is called at any stage of inference; everything runs offline from the shipped weights. No external footage was used — the 21-zone scene geometry was calibrated by hand from the official sample videos' first frames (the organizers confirmed no `camera.md` is provided for this task).
+| video | duration | events | by class | Part A | Part B | total / duration | risk >= 0.5 |
+|---|---|---|---|---|---|---|---|
+| C3896.MP4 | 340 s | 14 | failure_to_yield 4, jaywalking 7, red_light 1, stop_line 2 | 166 s | 216 s | 1.12x | 0.00% |
+| C3897.MP4 | 318 s | 16 | failure_to_yield 5, jaywalking 8, stop_line 2, stopped_vehicle 1 | 150 s | 203 s | 1.11x | 0.50% |
+| C3902.MP4 | 318 s | 24 | failure_to_yield 8, jaywalking 15, stop_line 1 | 159 s | 207 s | 1.15x | 0.35% |
+| C3905.MP4 | 128 s | 9 | congestion 1, failure_to_yield 4, jaywalking 2, stop_line 1, stopped_vehicle 1 | 67 s | 82 s | 1.17x | 0.00% |
+
+Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the video duration.
+
+---
+
+## Limitations (stated plainly)
+
+- **No labelled dev set.** F1 has not been measured. `src/devset/csv_to_gt.py` converts per-video CSV labels (`start,end,label,note`) into `evaluate.py` ground truth, and `scripts/eval_dev.sh` runs the whole evaluation. Labelling the four samples is the next step.
+- `accident`, `near_miss`, `wrong_way`, `fire_smoke` and `road_obstacle` produced no events on the samples. Their rules are deliberately strict, so recall on the hidden set is unknown.
+- `jaywalking` ignores people within ~1 m of a zebra, island or kerb, which trades recall for precision.
+- The three turn/marking classes are off (see Class policy).
+- Part B is a heuristic (time-to-collision). It was not calibrated on real crashes because the samples contain none.
 
 ---
 
 ## Determinism
 
-To guarantee 100% reproducible benchmark scores and prevent floating-point or stochastic tracking discrepancies across different runs and hardware, all pseudo-random number generators are strictly fixed to seed `42` at module initialization:
+`src/config.py:seed_everything(42)` seeds `random`, NumPy and PyTorch, and sets cuDNN
+to deterministic mode. The pipeline has no other randomness: ByteTrack and the
+rules are deterministic given the detections. GPU convolution kernels can still
+differ at the floating-point-noise level across GPU models.
 
-```python
-import random
-import numpy as np
-import torch
-
-random.seed(42)
-np.random.seed(42)
-torch.manual_seed(42)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(42)
-```
-
-Models are loaded once per process and memoized (`_load_yolo`), so repeated runs over a folder of videos are both faster and identical.
+A time guard exists: if Part A's frame loop runs slower than 1.6× real time, the detector
+stride is doubled for the rest of the video. This never triggered on the test
+machine, but on a much slower GPU it could make runs differ.
 
 ---
 
-## Repository Layout
+## Repository layout
 
 ```
-├── solution.py              # the official interface: CLASSES, detect_events, RiskEstimator
-├── run_submission.py        # organizers' harness (unchanged)
-├── evaluate.py              # organizers' metric + format check (unchanged)
-├── requirements.txt         # pinned dependencies
-├── weights/download.sh      # one-command weight fetch (≤ 5 GB)
-├── src/
-│   ├── annotate.py          # annotated-video renderer (previews & demo clips)
-│   └── eda_extractor.py     # sample-video metadata + EDA artifact extraction
-├── notebooks/               # EDA experiments
-├── samples/previews/        # fully annotated sample videos (rendered by src/annotate.py)
-├── eda_results/             # EDA artifacts (metadata, first frames, charts)
-├── predictions_samples.json # our output on the sample videos (team: dewew)
-└── app.py                   # team website (Streamlit)
+solution.py                 interface for the harness (thin wrapper over src/)
+run_submission.py           organizers' harness (unchanged)
+evaluate.py                 organizers' metric (unchanged)
+src/
+  registration.py           per-video scene registration
+  scene.py                  hand-calibrated scene layout (reference 4K frame)
+  traffic_light.py          lamp read-out + debounced signal state
+  perception.py             detector, duplicate suppression, tracker, anomaly model
+  tracks.py                 per-track kinematics
+  rules.py                  one method per event class
+  postprocess.py            merge / clip / drop blips
+  events.py                 Part A pipeline (+ replay from cached perception)
+  risk.py                   Part B estimator
+  config.py                 thresholds, enabled classes, seed
+  annotate.py               annotated-video renderer (website previews / demo clips)
+  deep_eda.py, eda_extractor.py   EDA artefacts for the website
+  devset/                   labelling helpers (CSV -> ground truth, review clips, report)
+scripts/                    replay_rules.py, signal_timeline.py, eval_dev.sh, smoke.sh, make_clip.py
+tests/                      unit tests + end-to-end smoke test through run_submission.py
+docs/                       scene.md, class_policy.md
+assets/scene_ref.jpg        reference frame for registration
+weights/                    download.sh / download.py / SHA256SUMS
+app.py                      team website (Streamlit)
 ```
+
+Development: `pip install -r requirements-dev.txt`, then `bash scripts/smoke.sh`, which runs
+`pytest` (unit tests plus an 8 s clip through the official harness) and a website import check.
 
 ---
 
-## Engineering Squad (Team dewew)
+## Open-source code used
 
-- **Ollabergan** — Lead Computer Vision & Full-Stack AI Architect ([GitHub](https://github.com/DeWeWO) • [LinkedIn](https://www.linkedin.com/in/dewew/))
-- **Seymonbek Ikramov** — Deep Learning & Causal Risk Specialist ([GitHub](https://github.com/Seymonbek) • [LinkedIn](https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/))
-- **Soliyev Siroj** — Data Ops & Evaluation Engineer (sample EDA, dev-set annotation, benchmark runs)
+- Ultralytics YOLO (AGPL-3.0) for detection.
+- supervision (MIT) for ByteTrack.
+- OpenCV (Apache-2.0) for video I/O, SIFT and geometry.
+
+No external footage was used. The scene layout was drawn by hand on a sample frame. The organizers
+confirmed that `camera.md` is not provided.
+
+---
+
+## Team
+
+- **Ollabergan** — computer vision and system architecture, website ([GitHub](https://github.com/DeWeWO) • [LinkedIn](https://www.linkedin.com/in/dewew/))
+- **Seymonbek Ikramov** — anomaly model integration, Part B risk estimator ([GitHub](https://github.com/Seymonbek) • [LinkedIn](https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/))
+- **Soliyev Siroj** — sample-video EDA, scene annotation notes, evaluation runs

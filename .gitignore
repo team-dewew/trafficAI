@@ -81,3 +81,20 @@ weights/*.weights
 scratch/
 demo_clips/
 temp_*.mp4
+
+# Local-only material (not part of the submission)
+.agents/
+skills-lock.json
+smoke.json
+reference.png
+reference.jpg
+reference resource.txt
+Videos.pdf
+WIUT Hackathon _ CV Track Elimination Task.pdf
+benchmark_runner.py
+FIX_PLAN*.md
+cache/
+devset/clips/
+tests/data/
+.pytest_cache/
+.ruff_cache/

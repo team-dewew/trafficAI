@@ -1,0 +1,17 @@
+venv/
+.venv/
+samples/*.MP4
+samples/*.mp4
+samples/previews/
+tests/data/
+cache/
+scratch/
+demo_clips/
+eda_results/
+assets/team/
+.git/
+__pycache__/
+*.pyc
+*.pdf
+reference.png
+reference.jpg

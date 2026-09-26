@@ -1,42 +1,48 @@
+"""End-to-end smoke test through the official harness on an 8 s clip.
+
+The clip is cut from samples/C3905.MP4 by scripts/make_clip.py (samples are not
+committed); the test is skipped when neither the clip nor the sample exists.
+"""
+from __future__ import annotations
+
 import json
 import subprocess
+import sys
 from pathlib import Path
 
-import sys
+import pytest
 
-def test_smoke():
-    # 1. Run run_submission.py on tests/data
-    out_json = Path("smoke.json")
-    if out_json.exists():
-        out_json.unlink()
-        
-    cmd = [sys.executable, "run_submission.py", "--videos", "tests/data", "--out", str(out_json)]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    assert result.returncode == 0, f"run_submission.py failed:\n{result.stderr}"
-    
-    # 2. Check JSON
-    assert out_json.exists()
-    with open(out_json, "r") as f:
-        data = json.load(f)
-        
-    assert "videos" in data
-    assert "clip8s.mp4" in data["videos"]
-    
-    # Check log for errors
-    assert "log" in data
-    assert "clip8s.mp4" in data["log"]
-    assert len(data["log"]["clip8s.mp4"].get("errors", [])) == 0, "Errors found in log"
-    
-    # Check evaluate.py
-    cmd_eval = [sys.executable, "evaluate.py", "--pred", str(out_json), "--validate-only"]
-    result_eval = subprocess.run(cmd_eval, capture_output=True, text=True)
-    assert result_eval.returncode == 0, f"evaluate.py failed:\n{result_eval.stderr}"
+ROOT = Path(__file__).resolve().parent.parent
+CLIP = ROOT / "tests" / "data" / "clip8s.mp4"
 
-    # Check app import
-    cmd_app = [sys.executable, "-c", "import app"]
-    result_app = subprocess.run(cmd_app, capture_output=True, text=True)
-    assert result_app.returncode == 0, f"app.py import failed:\n{result_app.stderr}"
 
-if __name__ == "__main__":
-    test_smoke()
-    print("SMOKE OK")
+@pytest.fixture(scope="module")
+def clip() -> Path:
+    if not CLIP.exists():
+        if not (ROOT / "samples" / "C3905.MP4").exists():
+            pytest.skip("no sample video available")
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "make_clip.py")], check=True, cwd=ROOT)
+    return CLIP
+
+
+def test_harness_runs_clean(clip: Path, tmp_path: Path):
+    out = tmp_path / "smoke.json"
+    res = subprocess.run(
+        [sys.executable, "run_submission.py", "--videos", str(clip), "--out", str(out), "--time-factor", "6"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    assert res.returncode == 0, res.stderr[-2000:]
+    data = json.loads(out.read_text())
+    log = data["log"][clip.name]
+    assert log["errors"] == [], log["errors"]
+    risk = data["videos"][clip.name]["risk"]
+    assert len(risk) > 200 and all(0.0 <= s <= 1.0 for _, s in risk)
+
+    val = subprocess.run([sys.executable, "evaluate.py", "--pred", str(out), "--validate-only"],
+                         cwd=ROOT, capture_output=True, text=True)
+    assert val.returncode == 0, val.stdout + val.stderr
+
+
+def test_website_imports():
+    res = subprocess.run([sys.executable, "-c", "import app"], cwd=ROOT, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr[-2000:]

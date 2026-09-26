@@ -14,8 +14,8 @@ import pandas as pd
 import streamlit as st
 
 from solution import CLASSES, RiskEstimator, detect_events
-from src.scene import SCENE_CONFIG
-from src.annotate import render_annotated
+from src.annotate import draw_scene, render_annotated
+from src.events import open_scene
 
 # Live demo constraints (stated publicly per the hackathon website rubric:
 # "State the size and length you accept (2 minutes is enough)").
@@ -971,44 +971,19 @@ def get_video_metadata(video_path: str) -> dict:
 
 @st.cache_data(show_spinner=False)
 def render_zone_overlay(video_path: str) -> np.ndarray | None:
-    """Generate Frame 0 visualization with the 21 spatial zones overlaid in color."""
+    """Frame 0 with the scene layout registered onto this video (same code path as Part A)."""
     try:
         p = Path(video_path).resolve()
         if not p.exists():
             return None
         cap = cv2.VideoCapture(str(p))
-        if not cap.isOpened():
-            return None
         ret, frame = cap.read()
         cap.release()
         if not ret or frame is None:
             return None
-
-        vis = frame.copy()
-        # Draw Stop Line Red
-        if "stop_line_red" in SCENE_CONFIG:
-            p1, p2 = SCENE_CONFIG["stop_line_red"]
-            cv2.line(vis, tuple(p1), tuple(p2), (0, 0, 255), 6)
-            cv2.putText(vis, "STOP LINE (RED)", (int(p1[0]), int(p1[1]) - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-        # Draw Stop Line Jam
-        if "stop_line_jam" in SCENE_CONFIG:
-            j1, j2 = SCENE_CONFIG["stop_line_jam"]
-            cv2.line(vis, tuple(j1), tuple(j2), (0, 255, 255), 5)
-            cv2.putText(vis, "JAM LINE", (int(j1[0]), int(j1[1]) - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
-        # Draw Crosswalks (Zebras)
-        for cw in SCENE_CONFIG.get("crosswalks", []):
-            cv2.polylines(vis, [cw], isClosed=True, color=(255, 180, 0), thickness=4)
-        # Draw Forbidden Concrete Islands
-        for isl in SCENE_CONFIG.get("forbidden_islands", []):
-            cv2.polylines(vis, [isl], isClosed=True, color=(200, 0, 255), thickness=4)
-        # Draw Travel Lanes
-        for lane_key in ["lane_ltr", "lane_rtl"]:
-            if lane_key in SCENE_CONFIG:
-                cv2.polylines(vis, [SCENE_CONFIG[lane_key]], isClosed=True, color=(0, 255, 120), thickness=3)
-
-        # Convert to RGB and resize to 720p for fast web rendering
-        vis_rgb = cv2.cvtColor(vis, cv2.COLOR_BGR2RGB)
-        return cv2.resize(vis_rgb, (1280, 720))
+        scene, _ = open_scene(str(p))
+        vis = draw_scene(frame.copy(), scene)
+        return cv2.resize(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB), (1280, 720))
     except Exception:
         return None
 
@@ -1254,7 +1229,7 @@ if selected_section == "Team":
                     <span class="team-role-pill">LEAD CV & FULL-STACK AI ARCHITECT</span>
                 </div>
                 <div class="team-bio">
-                    Architected the end-to-end Traffic AI system: 21-zone geometric spatial map, dynamic traffic light auto-alignment, multi-object trajectory association logic, and Streamlit Control Center UI.
+                    Architected the end-to-end system: hand-calibrated scene layout, per-video scene registration, tracking and event rules, and the Streamlit website.
                 </div>
                 <div class="team-skills">
                     <span class="skill-chip">PyTorch</span>
@@ -1292,7 +1267,7 @@ if selected_section == "Team":
                     <span class="team-role-pill">DEEP LEARNING & CAUSAL RISK SPECIALIST</span>
                 </div>
                 <div class="team-bio">
-                    Trained and integrated secondary anomaly model (YOLOv8x Crash/Fire), formulated causal accident risk estimation P(t) without future leakage, and designed temporal TTC risk heuristics.
+                    Integrated the open-weights YOLOv8x crash/fire model (Hugging Face) and its gating, and designed the causal Part B risk estimator (time-to-collision on collision courses).
                 </div>
                 <div class="team-skills">
                     <span class="skill-chip">PyTorch</span>
@@ -1367,7 +1342,7 @@ if selected_section == "Team":
             """
             <div class="callout-card">
                 <div class="callout-title">Perception & Spatial Geometry</div>
-                <div class="callout-body">Vectorized polygon triggers, trajectory displacement vectors, and dual-band HSV red light segmentation.</div>
+                <div class="callout-body">Polygon zones on registered scene geometry, scale-free track kinematics, and a lamp-level traffic-signal read-out.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1402,7 +1377,7 @@ elif selected_section == "Problem and Approach":
         module_num="02",
         eyebrow_suffix="SYSTEM ARCHITECTURE",
         title="Problem Statement & Technical Approach",
-        subtitle="Hybrid AI Architecture: YOLO11 + 21-Zone Geometric Logic + Secondary YOLOv8x Anomaly Model",
+        subtitle="YOLO11-L + ByteTrack + per-video scene registration + rule engine; YOLOv8x anomaly model for crashes and fire",
         badge_text="PIPELINE VERIFIED",
         mini_spec="3.0x BUDGET COMPLIANT",
     )
@@ -1412,7 +1387,7 @@ elif selected_section == "Problem and Approach":
         st.markdown(
             '<div class="metric-card"><div class="metric-value">14 Classes</div>'
             '<div class="metric-label">Target Taxonomy</div>'
-            '<div class="metric-sub">10 Spatial + 2 Anomaly</div></div>',
+            '<div class="metric-sub">11 emitted, 3 switched off</div></div>',
             unsafe_allow_html=True,
         )
     with k2:
@@ -1451,69 +1426,68 @@ elif selected_section == "Problem and Approach":
         unsafe_allow_html=True,
     )
 
-    approach_tabs = st.tabs(["Pipeline Architecture Dataflow", "21-Zone Spatial Rules Matrix", "Learned Models & Anti-Jitter Part B"])
+    approach_tabs = st.tabs(["Pipeline", "Rules per class", "Learned models & Part B"])
 
     with approach_tabs[0]:
-        st.markdown("#### Complete End-to-End System Pipeline")
+        st.markdown("#### End-to-end pipeline (what `python run_submission.py` executes)")
         st.markdown(
             """
         ```mermaid
         graph LR
-            A[4K Surveillance Stream] --> B[Frame 0: YOLO Traffic Light AI Alignment]
-            B --> C[Dynamic Coordinate Transform: ALIGNED_CONFIG]
-            C --> D[YOLO11 Large Detection: 640p GPU]
-            D --> E[ByteTrack Multi-Object Association]
-            E --> F{Event Evaluation Engine}
-            F -->|Rule-Based 21-Zone Map| G[11 Spatial Classes: Red Light, Jaywalk, Near Miss, Wrong-Way, etc.]
-            F -->|Learned YOLOv8x Anomaly| H[2 Physical Classes: Accident & Fire/Smoke]
-            E --> I[Causal RiskEstimator: TTC & Pedestrian Hazard Corridor]
-            G --> J[Temporal Segment Merger: merge_same_class_segments]
-            H --> J
-            J --> K[Format-Compliant predictions.json]
-            I --> K
+            V[4K video] --> R[Scene registration: SIFT + RANSAC similarity vs reference frame]
+            R --> Z[Scene layout mapped onto this video: zones, stop lines, signal lamps]
+            V --> S[Signal state from lamp colour, debounced]
+            V --> D[YOLO11-L @960, FP16, every 3rd frame]
+            D --> N[Duplicate car/truck suppression] --> T[ByteTrack]
+            T --> K[Track state: ground point, speed in body-lengths/s]
+            Z --> E{Rule engine}
+            S --> E
+            K --> E
+            V --> A[Anomaly YOLOv8x @1 Hz] --> E
+            E --> P[Merge / clip / drop blips] --> O[events]
+            V --> B[Part B: YOLOv8n every 3rd frame, TTC on collision course, EMA] --> Q[risk curve]
         ```
         """
         )
         st.markdown(
             """
             <div class="pill-strip">
-                <div class="pill-item">Stage 1: <b>Frame 0 Auto-Calibration</b> (Traffic light cluster anchor)</div>
-                <div class="pill-item">Stage 2: <b>YOLO11 Large</b> (Vehicles, Pedestrians, Obstacles)</div>
-                <div class="pill-item">Stage 3: <b>ByteTrack Causal</b> (Persistent ID & Displacement vectors)</div>
-                <div class="pill-item">Stage 4: <b>Secondary Anomaly Model</b> (Crash/Fire @ stride=5)</div>
-                <div class="pill-item">Stage 5: <b>Anti-Blip Post-Processing</b> (Merge <=2.0s, Drop <0.5s)</div>
+                <div class="pill-item">Learned: <b>YOLO11-L</b> (COCO), <b>YOLOv8n</b> (COCO), <b>YOLOv8x anomaly model</b> (accident / fire / smoke)</div>
+                <div class="pill-item">Rule-based: registration, signal state, tracking logic, every event rule, risk score</div>
+                <div class="pill-item">No training on our side; thresholds tuned by frame-level inspection of the sample videos</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        st.markdown(
+            "**Why registration?** The camera pose differs between recordings: up to 91 px of shift and 1 degree of rotation "
+            "at 4K. Without it the stop lines drift and, in C3902, the signal window lands on a road sign. "
+            "**Why lamps?** A lit lamp is ~5 px tall, so a colour mask over the whole housing either never fires or always fires. "
+            "Reading each lamp gives a clean 37 s red / 35 s green cycle on all four videos."
+        )
 
     with approach_tabs[1]:
-        st.markdown("#### 21-Zone Geometric Rules Matrix")
+        st.markdown("#### Classes we emit and the rule behind each one")
+        policy = Path("docs/class_policy.md")
+        if policy.exists():
+            st.markdown(policy.read_text(encoding="utf-8").split(chr(10), 1)[1])
         from src.config import RULES
-        rules_list = []
-        for cls, cfg in RULES.items():
-            desc = ", ".join([f"{k}={v}" for k, v in cfg.items() if k != "min_duration"])
-            rules_list.append({
-                "Class": cls,
-                "Min Duration": f"{cfg.get('min_duration', 0.5)}s",
-                "Heuristics": desc if desc else "Geom triggers"
-            })
-        rules_df = pd.DataFrame(rules_list)
-        st.dataframe(rules_df, use_container_width=True)
+        with st.expander("All thresholds (src/config.py)"):
+            st.json(RULES)
 
     with approach_tabs[2]:
-        st.markdown("#### Learned Anomaly Models & Causal Risk Anticipation (Part B)")
+        st.markdown("#### Learned anomaly model and Part B")
         r_c1, r_c2 = st.columns(2)
         with r_c1:
             st.markdown(
                 """
                 <div class="callout-card callout-success">
-                    <div class="callout-title">Physical Accident & Fire/Smoke Detection</div>
+                    <div class="callout-title">Accident / fire / smoke</div>
                     <div class="callout-body">
-                        Non-linear physical collisions and vehicle fires cannot be solved by 2D bounding box geometry alone.<br><br>
-                        • <b>Model</b>: Secondary <code>YOLOv8x Anomaly</code> (<code>weights/accident_model.pt</code>)<br>
-                        • <b>Stride Decoupling</b>: Evaluated every 5 frames on GPU, preventing FPS degradation and keeping execution comfortably within 3.0x budget.<br>
-                        • <b>Confidence Threshold</b>: 0.40 with temporal continuity requirement.
+                        • <b>Model</b>: YOLOv8x fine-tuned for crash severity and fire/smoke (<code>weights/accident_model.pt</code>)<br>
+                        • <b>Rate</b>: once per second of video<br>
+                        • <b>Gate</b>: confidence >= 0.6, box on the carriageway and covering a vehicle, positive in >= 3 of 4 consecutive checks.
+                        Without the gate it fired on ordinary traffic.
                     </div>
                 </div>
                 """,
@@ -1523,12 +1497,16 @@ elif selected_section == "Problem and Approach":
             st.markdown(
                 """
                 <div class="callout-card">
-                    <div class="callout-title">Part B: Causal Risk Estimator & Anti-Jitter</div>
+                    <div class="callout-title">Part B: causal risk estimator</div>
                     <div class="callout-body">
-                        The causal risk score <i>P(t) ∈ [0, 1]</i> predicts accident likelihood without any future lookahead.<br><br>
-                        • <b>Pairwise TTC Proxies</b>: Evaluates bounding box IoU (> 0.6) and centroid proximity (< 40 px in 640p).<br>
-                        • <b>Anti-Jitter Mathematical Filter</b>: In dense traffic jams, stationary vehicle box jitter can produce false speed readings. We enforce strict velocity thresholding to prevent flatline 0.85 risk curves.<br>
-                        • <b>Exponential Smoothing</b>: Past risk states are smoothly decayed with α = 0.15.
+                        Sees only the frames passed to <code>step()</code>.<br><br>
+                        • <b>Detector</b>: YOLOv8n on every 3rd frame, ByteTrack, ground-point velocities in pixels per second of video time<br>
+                        • <b>Signal</b>: for every pair of road users on the carriageway, time-to-collision along their relative motion,
+                        counted only if their closest approach is within 0.3 of their size (a real collision course) for two consecutive updates<br>
+                        • <b>Perspective guards</b>: duplicate car/truck boxes merged; far-field objects and pairs on the far carriageway ignored;
+                        same-direction pairs count only when closing fast in the same lane (rear-end)<br>
+                        • <b>Score</b>: logistic in TTC (0.5 at about 1.0 s), max over pairs, EMA smoothing (alpha 0.35).
+                        On the samples (no crashes) the score is >= 0.5 in under 0.5% of frames
                     </div>
                 </div>
                 """,
@@ -1685,19 +1663,31 @@ elif selected_section == "EDA of sample videos":
                 sel_traj = st.selectbox("Feed:", [p.stem.replace("_trajectories", "") for p in trajectories], key="eda_traj_feed")
                 st.image(str(eda_dir / f"{sel_traj}_trajectories.png"), caption=f"Vehicle trajectory trails — {sel_traj}: dominant lane vectors used to calibrate wrong-way direction rules.", use_container_width=True)
 
+    # Numbers below are computed from the committed EDA artefacts, not typed in.
+    flow_lines = []
+    try:
+        dist = pd.read_csv(eda_dir / "class_distribution.csv").set_index("class")["detections"]
+        veh = dist.reindex(["car", "bus", "truck", "motorcycle"]).fillna(0)
+        flow_lines.append(
+            "• <b>Vehicle mix</b> (all detections, 4 videos): "
+            + ", ".join(f"{k} {100 * v / veh.sum():.1f}%" for k, v in veh.items())
+        )
+        dens = [pd.read_csv(f)["vehicles_per_frame"] for f in sorted(eda_dir.glob("*_density.csv"))]
+        if dens:
+            allv = pd.concat(dens)
+            flow_lines.append(
+                f"• <b>Density</b>: {allv.min():.1f} to {allv.max():.1f} vehicles in view per frame (per-minute means); "
+                "the scene is never empty, so every rule must tolerate heavy occlusion"
+            )
+    except Exception:
+        pass
+    flow_lines.append("• <b>Pedestrians</b> are on or next to the carriageway almost constantly, "
+                      "so bare pedestrian presence cannot be a risk signal (Part B uses collision courses instead)")
     col3, col4 = st.columns(2)
     with col3:
         st.markdown(
-            """
-            <div class="callout-card">
-                <div class="callout-title">Intersection Flow Dynamics</div>
-                <div class="callout-body">
-                    • <b>Primary Corridor</b>: East-to-West straight channel carries 82% of vehicle flow.<br>
-                    • <b>Secondary Slipway</b>: Southbound right-turn channel accounts for 14% of turns.<br>
-                    • <b>Pedestrian Incursions</b>: Concentrated at Crosswalk #1 & #2, highly synchronized with signal transition intervals.
-                </div>
-            </div>
-            """,
+            '<div class="callout-card"><div class="callout-title">Traffic composition (measured)</div>'
+            '<div class="callout-body">' + "<br>".join(flow_lines) + "</div></div>",
             unsafe_allow_html=True,
         )
     with col4:
@@ -1706,9 +1696,9 @@ elif selected_section == "EDA of sample videos":
             <div class="callout-card callout-warning">
                 <div class="callout-title">Signal Phase & Stop Line Infractions</div>
                 <div class="callout-body">
-                    • <b>Average Red Phase</b>: 45.0 seconds | <b>Green Phase</b>: 65.0 seconds.<br>
-                    • <b>Critical Risk Window</b>: 88% of stop line crossings occur during the first 3.5 seconds of red phase initiation.<br>
-                    • <b>C3902 Evening Glare</b>: Requires widened HSV hue bounds to catch desaturated red signal LEDs.
+                    • <b>Measured cycle</b> (lamp read-out, 1 sample/s, all 4 videos): ~37 s red, ~35 s green, 3-6 s amber/transition.<br>
+                    • <b>Lamp contrast</b>: an unlit red lamp scores <= 10, a lit one >= 45 (day) / >= 220 (dusk); green <= 17 vs >= 126.<br>
+                    • <b>Consequence</b>: red-light and stop-line rules require red to have been on >= 1 s, and a lane_ltr stop counts as a signal queue if the car moves off within 15 s of green.
                 </div>
             </div>
             """,
@@ -1886,12 +1876,12 @@ elif selected_section == "Results on sample videos":
     with fail_c1:
         st.markdown(
             """
-            <div class="callout-card callout-warning">
-                <div class="callout-title">Case 01: Evening Color Desaturation (C3902)</div>
+            <div class="callout-card callout-danger">
+                <div class="callout-title">Case 01: The camera is not perfectly fixed</div>
                 <div class="callout-body">
-                    <b>Observed Failure</b>: Overexposed setting sun bleached red traffic LEDs into white-orange hue, causing missed stop-line infractions.<br><br>
-                    <b>Root Cause</b>: Default HSV red hue bounds (0-10 & 170-180) failed on washed-out pixels.<br><br>
-                    <b>Fix Implemented</b>: Expanded saturation bounds and relaxed red threshold to 5 px in Frame 0 auto-alignment.
+                    <b>Observed</b>: the pose differs between recordings: C3902 is shifted by (-91, +28) px, and C3896/C3897 are rotated by 1 degree and scaled by 0.986.
+                    With the zones drawn on C3905, the C3902 signal window landed on the pedestrian-crossing sign.<br><br>
+                    <b>Fix</b>: SIFT + RANSAC similarity registration against the reference frame at start-up, applied to every zone, line and lamp.
                 </div>
             </div>
             """,
@@ -1900,12 +1890,12 @@ elif selected_section == "Results on sample videos":
     with fail_c2:
         st.markdown(
             """
-            <div class="callout-card callout-danger">
-                <div class="callout-title">Case 02: Wind-Induced Camera Shift (C3902)</div>
+            <div class="callout-card callout-warning">
+                <div class="callout-title">Case 02: Signal read-out (two failed versions)</div>
                 <div class="callout-body">
-                    <b>Observed Failure</b>: Camera mount experienced a (-94, +37) pixel physical displacement, misaligning all 21 zones.<br><br>
-                    <b>Root Cause</b>: Static pixel coordinates are fragile to pole vibrations and camera readjustments.<br><br>
-                    <b>Fix Implemented</b>: Dynamic YOLO traffic light cluster detection on Frame 0 auto-translates all 21 geometric zones.
+                    <b>v1</b> (red-pixel count over the housing) said RED ~99% of the time on C3896, even with the green lamp lit.
+                    <b>v2</b> (thirds of the box, 5% area) said UNKNOWN ~100% of the time, because a lit lamp is only ~5 px tall.<br><br>
+                    <b>v3</b> reads small windows at the measured lamp centres and gives a clean cycle on all four videos.
                 </div>
             </div>
             """,
@@ -1915,11 +1905,12 @@ elif selected_section == "Results on sample videos":
         st.markdown(
             """
             <div class="callout-card">
-                <div class="callout-title">Case 03: Heavy Vehicle Occlusion</div>
+                <div class="callout-title">Case 03: Riders, kerbs and parked cars</div>
                 <div class="callout-body">
-                    <b>Observed Failure</b>: Passing double-axle trucks occluded trailing sedans, creating brief ByteTrack ID switches.<br><br>
-                    <b>Root Cause</b>: Pure visual IoU loses tracks during multi-second complete visual occlusions.<br><br>
-                    <b>Fix Implemented</b>: Linear velocity buffer projection bridges 15-frame occlusion gaps without losing track IDs.
+                    Frame-by-frame checks of every candidate event showed the dominant false positives:
+                    motorcycle riders counted as pedestrians, people waiting at the kerb inside the zebra polygon,
+                    signal queues and parked cars read as "stopped vehicles" or "congestion". Each now has an explicit exclusion.<br><br>
+                    <b>Still open</b>: we have no hand-labelled dev set, so recall is unmeasured. People who walk just beside a zebra are deliberately not flagged.
                 </div>
             </div>
             """,
@@ -2075,10 +2066,10 @@ elif selected_section == "Live Demo":
                 import uuid
                 if "session_id" not in st.session_state:
                     st.session_state["session_id"] = str(uuid.uuid4())
-                tmp_dir = Path(tempfile.mkdtemp(prefix=f"wiut_{st.session_state['session_id']}_"))
-                upload_dest = (tmp_dir / uploaded_file.name).resolve()
                 current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
                 if st.session_state.get("last_uploaded_id") != current_file_id:
+                    tmp_dir = Path(tempfile.mkdtemp(prefix=f"wiut_{st.session_state['session_id']}_"))
+                    upload_dest = (tmp_dir / Path(uploaded_file.name).name).resolve()
                     # New upload: drop every cached result tied to the previous file,
                     # otherwise the old video's telemetry would render for the new one.
                     for _k in _DEMO_CACHE_KEYS:
@@ -2213,8 +2204,10 @@ elif selected_section == "Live Demo":
                     break
                 t_sec = frame_idx / fps
 
+                # step() on every frame, exactly like run_submission.py (the
+                # estimator skips frames internally); plot every 5th value.
+                score = estimator.step(frame, t_sec)
                 if frame_idx % 5 == 0:
-                    score = estimator.step(frame, t_sec)
                     risk_scores.append(round(score, 4))
                     timestamps.append(round(t_sec, 2))
 
@@ -2424,7 +2417,7 @@ elif selected_section == "Report":
         title="Executive Project Report",
         subtitle="Comprehensive engineering debrief: What Worked, What Didn't, and What We Would Do Next.",
         badge_text="EXECUTIVE BRIEFING",
-        mini_spec="PRODUCTION READY",
+        mini_spec="HONEST DEBRIEF",
     )
 
     r_col1, r_col2, r_col3 = st.columns(3)
@@ -2433,16 +2426,13 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card callout-success" style="min-height: 520px;">
-                <div class="callout-title" style="color: #10b981; font-size: 1.05rem;">01. What Worked</div>
+                <div class="callout-title" style="color: #10b981; font-size: 1.05rem;">01. What worked</div>
                 <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
-                    <b>• 21-Zone Vectorized Spatial Geometry:</b><br>
-                    Calibrating rigid polygonal coordinate boundaries for stop lines, travel lanes, pedestrian zebras, and concrete islands eliminated over 90% of false positives across complex intersection turns.<br><br>
-                    <b>• YOLO Traffic Light AI Auto-Alignment (Frame 0):</b><br>
-                    Querying YOLO specifically for the physical traffic light cluster on Frame 0 recovered massive camera shifts (<code>dx=-94, dy=+37</code> on <code>C3902.MP4</code>), ensuring sub-pixel spatial accuracy without human intervention.<br><br>
-                    <b>• Stride-Decoupled Dual Inference:</b><br>
-                    Decoupling high-frequency vehicle perception (YOLO11 Large on GPU) from low-frequency anomaly classification (<code>accident_model.pt</code> evaluated every 5 frames) kept total runtime well below the <code>3.0x</code> duration deadline.<br><br>
-                    <b>• Anti-Jitter Causal Risk:</b><br>
-                    Enforcing velocity gates on bounding box proximity prevented flatline 0.85 curves in dense traffic jams.
+                    <b>• Per-video scene registration</b> (SIFT + RANSAC similarity) recovers the camera drift between recordings, so one hand-drawn layout serves every video.<br><br>
+                    <b>• Reading the signal from its lamps</b> gives a clean red/green cycle on all four samples, day and dusk.<br><br>
+                    <b>• Scale-free motion</b>: speeds are measured in body-diagonals per second of track ground points, so one threshold works near and far from the camera.<br><br>
+                    <b>• Frame-level spot checks</b> of every candidate event (montages rendered from cached perception) exposed the real false-positive patterns quickly.<br><br>
+                    <b>• Runtime</b>: YOLO11-L @960 FP16 on every 3rd frame and the anomaly model at 1 Hz keep Part A at about 0.5x real time on an RTX 3050 laptop GPU.
                 </div>
             </div>
             """,
@@ -2453,14 +2443,13 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card callout-warning" style="min-height: 520px;">
-                <div class="callout-title" style="color: #f59e0b; font-size: 1.05rem;">02. What Didn't Work</div>
+                <div class="callout-title" style="color: #f59e0b; font-size: 1.05rem;">02. What did not work</div>
                 <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
-                    <b>• Classical Homography & Template Matching:</b><br>
-                    Automated template matching completely broke down when dynamic objects (passing double-decker buses, swaying trees) entered the anchor crop, causing massive +280px false shifts.<br><br>
-                    <b>• Deprecated Inference Flags:</b><br>
-                    Passing <code>half=True</code> to newer Ultralytics inference calls flooded stdout with deprecation warnings on every frame, creating severe console I/O bottlenecks that froze processing.<br><br>
-                    <b>• End-to-End Black Box Classifiers for Spatial Rules:</b><br>
-                    Attempting to classify nuanced spatial infractions (such as stopping 0.5m over a stop line or illegal lane switching) via monolithic video classification models lacked spatial interpretability and required prohibitive labeling.
+                    <b>• Colour masks over the signal housing</b>: first always red, then always unknown (see Results, Case 02).<br><br>
+                    <b>• Aligning on one detected traffic light</b>: a neighbouring signal head is ~100 px away, so a single-object anchor can snap to the wrong one. We replaced it with whole-scene feature registration.<br><br>
+                    <b>• Generic turn rules</b>: flagging every 90-degree turn as illegal produced 10-15 false events per video. Without the list of permitted manoeuvres, <code>illegal_turn</code>, <code>illegal_u_turn</code> and <code>solid_line_crossing</code> are switched off.<br><br>
+                    <b>• The off-the-shelf crash model</b> fires on ordinary traffic at its default confidence. It is now gated hard, and it produced no events on the samples.<br><br>
+                    <b>• No labelled dev set</b>: we could not measure F1. Thresholds are judgement calls from visual checks.
                 </div>
             </div>
             """,
@@ -2471,14 +2460,12 @@ elif selected_section == "Report":
         st.markdown(
             """
             <div class="callout-card" style="min-height: 520px; border-left-color: #38bdf8;">
-                <div class="callout-title" style="color: #38bdf8; font-size: 1.05rem;">03. What We Would Do Next</div>
+                <div class="callout-title" style="color: #38bdf8; font-size: 1.05rem;">03. What we would do next</div>
                 <div class="callout-body" style="margin-top: 12px; font-size: 0.88rem;">
-                    <b>• Spatio-Temporal Transformer Integration:</b><br>
-                    Train a lightweight VideoMAE or SlowFast backbone specialized for localized Central Asian driving behaviors to anticipate near-misses 3+ seconds earlier.<br><br>
-                    <b>• Predictive Trajectory Extrapolation (Kalman Filter):</b><br>
-                    Forecast vehicle motion vectors 1.5 seconds into the future to issue pre-emptive red light violations before physical line penetration occurs.<br><br>
-                    <b>• TensorRT & INT8 Quantization:</b><br>
-                    Compile YOLO11 and anomaly models into TensorRT engines for deployment on edge CCTV devices (Jetson Orin), achieving 120+ FPS throughput.
+                    <b>• Label the four samples</b> (CSV per video -> <code>python -m src.devset.csv_to_gt</code>) and tune every threshold against <code>evaluate.py</code>.<br><br>
+                    <b>• Map the permitted manoeuvres</b> (entry/exit gates per approach) to switch the turn classes back on.<br><br>
+                    <b>• Ground-plane homography</b> for metric speeds and distances (better TTC for Part B and near-miss).<br><br>
+                    <b>• A learned crash/near-miss model</b> fine-tuned on public CCTV crash data (e.g. CCD, DoTA) with a clear licence.
                 </div>
             </div>
             """,

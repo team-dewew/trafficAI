@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 130
+target-version = "py310"
+extend-exclude = ["venv", "app.py", "evaluate.py", "run_submission.py", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,37 +1,48 @@
 #!/usr/bin/env python3
 """
-annotate.py — offline annotated-video renderer for the Traffic AI pipeline.
+annotate.py — annotated-video renderer for the Traffic AI pipeline.
 
-Draws the AI-aligned 21-zone scene layout, tracked road-user boxes with track
-ids, live traffic-light state, a time HUD and an active-event banner onto every
-frame, and writes the result as an .mp4. Used for:
+Draws the registered scene layout, tracked road users, the signal state read
+from the lamps, a time HUD and an active-event banner, and writes an .mp4.
+It uses the same registration / perception / signal code as Part A, so what
+the video shows is what the rules saw. Used for:
 
-  1. samples/previews/*_preview.mp4  — fully annotated sample videos (website
-     "Results" section, regenerated offline via --events predictions_samples.json)
-  2. Live-demo event clips           — short annotated clips around each
-     detected event (website "Live demo" section)
+  1. samples/previews/*_preview.mp4 — annotated sample videos (website Results)
+  2. live-demo event clips          — short clips around each detected event
 
 CLI:
-    python src/annotate.py --video samples/C3896.MP4 --out samples/previews/C3896_preview.mp4 \
+    python -m src.annotate --video samples/C3896.MP4 --out samples/previews/C3896_preview.mp4 \
         --events predictions_samples.json [--stride 2] [--width 960]
-    python src/annotate.py --video upload.mp4 --out clip.mp4 --start 10 --end 20
+    python -m src.annotate --video upload.mp4 --out clip.mp4 --start 10 --end 20
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
+import time
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import cv2
-import numpy as np
-import supervision as sv
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
 
-from src.models import _load_yolo
-from src.scene import build_scene
-from src.traffic_light import TrafficLightDetector
-from solution import COCO_ROAD_USERS
+from src.events import open_scene  # noqa: E402
+from src.perception import Perception  # noqa: E402
+from src.traffic_light import SignalState, classify, lamp_scores  # noqa: E402
+
+ZONE_STYLE = [  # (scene key, BGR colour, thickness)
+    ("lane_ltr", (120, 200, 120), 2), ("lane_rtl", (200, 160, 120), 2),
+    ("intersection_core", (170, 170, 170), 2), ("right_turn_zone", (170, 170, 170), 2),
+    ("lower_core", (170, 170, 170), 2),
+]
+MULTI_STYLE = [("crosswalks", (0, 220, 0), 3), ("ped_refuge", (200, 0, 200), 2),
+               ("barriers", (60, 60, 230), 2), ("sidewalks", (230, 230, 0), 2)]
+LINE_STYLE = [("stop_line_strict", (0, 0, 255)), ("stop_line_tolerance", (0, 165, 255)),
+              ("yield_ped_line", (0, 255, 255))]
+SIGNAL_BGR = {"RED": (0, 0, 255), "GREEN": (0, 220, 0), "YELLOW": (0, 200, 255), "UNKNOWN": (160, 160, 160)}
 
 
 def _active_labels(events: list[list] | None, t_sec: float) -> list[str]:
@@ -39,6 +50,18 @@ def _active_labels(events: list[list] | None, t_sec: float) -> list[str]:
     if not events:
         return []
     return sorted({str(lbl) for s, e, lbl in events if float(s) <= t_sec <= float(e)})
+
+
+def draw_scene(img: np.ndarray, scene: dict) -> np.ndarray:
+    for key, col, th in ZONE_STYLE:
+        cv2.polylines(img, [scene[key].reshape(-1, 1, 2)], True, col, th, cv2.LINE_AA)
+    for key, col, th in MULTI_STYLE:
+        for poly in scene[key]:
+            cv2.polylines(img, [poly.reshape(-1, 1, 2)], True, col, th, cv2.LINE_AA)
+    for key, col in LINE_STYLE:
+        p = scene[key]
+        cv2.line(img, tuple(int(v) for v in p[0]), tuple(int(v) for v in p[1]), col, 5, cv2.LINE_AA)
+    return img
 
 
 def render_annotated(
@@ -50,178 +73,102 @@ def render_annotated(
     start_sec: float = 0.0,
     end_sec: float | None = None,
     progress_callback=None,
-    frame_sink=None,
 ) -> str:
-    """Render an annotated copy of `video_path` to `out_path`.
-
-    stride=2 keeps every 2nd frame (halves render time and file size with no
-    visible smoothness loss for previews).
-    """
+    """Render an annotated copy of `video_path` (optionally only [start_sec, end_sec])."""
+    scene, reg = open_scene(video_path)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"cannot open {video_path}")
-
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     src_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    ret, first_frame = cap.read()
-    if not ret or first_frame is None:
-        cap.release()
-        raise RuntimeError(f"cannot read first frame of {video_path}")
-
-    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    # We disabled AI alignment, so dx=dy=0 for now.
-    dx, dy = 0, 0
-    zones = build_scene(W, H, dx, dy)
-    tl_bbox = zones["raw"]["main_signal"]
-    tl_detector = TrafficLightDetector()
-    
-    # Create Annotators inline
-    zones["line_annotator_strict"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=0, b=0))
-    zones["line_annotator_tol"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=165, b=0))
-    zones["line_annotator_yield"] = sv.LineZoneAnnotator(thickness=4, color=sv.Color(r=255, g=255, b=0))
-    
-    zones["crosswalk_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=0, g=255, b=0), thickness=3) for z in zones["crosswalks"]]
-    zones["island_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=128, g=0, b=128), thickness=3) for z in zones["ped_refuge"] + zones["barriers"]]
-    zones["sidewalk_annotators"] = [sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=0, g=255, b=255), thickness=2) for z in zones["sidewalks"]]
-    
-    road_labels = ["Lane LTR", "Lane RTL", "Intersection", "Right Turn", "Lower Core"]
-    zones["road_annotators"] = [
-        (sv.PolygonZoneAnnotator(zone=z, color=sv.Color(r=200, g=200, b=200), thickness=2), lbl)
-        for z, lbl in zip(zones["road_zones"], road_labels)
-    ]
-
-    start_frame = max(0, int(start_sec * fps))
-    stop_frame = total_frames - 1 if end_sec is None else min(total_frames - 1, int(end_sec * fps))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    start_f = max(0, int(start_sec * fps))
+    stop_f = total - 1 if end_sec is None else min(total - 1, int(end_sec * fps))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_f)
 
     out_w = int(width)
-    out_h = int(round(src_h * (out_w / src_w)))
-    out_h -= out_h % 2  # codec-friendly even height
+    out_h = int(round(src_h * out_w / src_w))
+    out_h -= out_h % 2
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(
-        out_path, cv2.VideoWriter_fourcc(*"mp4v"), max(1.0, fps / max(1, stride)), (out_w, out_h)
-    )
+    writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), max(1.0, fps / stride), (out_w, out_h))
 
-    from src.tracking import make_tracker
-    tracker = make_tracker(fps, stride)
-    box_annotator = sv.BoxAnnotator(thickness=2)
-    label_annotator = sv.LabelAnnotator(text_scale=0.6, text_thickness=2)
+    perception = Perception(fps, stride, use_anomaly=False)
+    signal = SignalState()
+    idx, written = start_f, 0
+    try:
+        while idx <= stop_f:
+            if (idx - start_f) % stride != 0:
+                if not cap.grab():
+                    break
+                idx += 1
+                continue
+            ok, frame = cap.read()
+            if not ok or frame is None:
+                break
+            t = idx / fps
+            sig = signal.update(t, classify(lamp_scores(frame, scene["main_signal_lamps"], scene["px_scale"])))
+            obs = perception(frame, t)
 
-    frame_idx = start_frame
-    written = 0
-    while cap.isOpened() and frame_idx <= stop_frame:
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            break
-        frame_idx += 1
-        if stride > 1 and (frame_idx % stride) != 0:
-            continue
+            ann = draw_scene(frame.copy(), scene)
+            for (lx, ly) in scene["main_signal_lamps"].values():
+                cv2.circle(ann, (int(lx), int(ly)), int(14 * scene["px_scale"]), SIGNAL_BGR[sig], 3)
+            for tid, box, name in zip(obs.tids, obs.boxes, obs.names):
+                x1, y1, x2, y2 = (int(v) for v in box)
+                col = (0, 200, 255) if name == "pedestrian" else (255, 180, 0)
+                cv2.rectangle(ann, (x1, y1), (x2, y2), col, 3)
+                cv2.putText(ann, f"#{tid} {name}", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, col, 2, cv2.LINE_AA)
 
-        t_sec = frame_idx / fps
-        tl_state = tl_detector.get_state(frame, tl_bbox)
-
-        results = model(frame, verbose=False, classes=list(COCO_ROAD_USERS.keys()), imgsz=640)[0]
-        detections = sv.Detections.from_ultralytics(results)
-        tracked = tracker.update_with_detections(detections)
-
-        if frame_sink is not None:
-            frame_sink(frame_idx, t_sec, frame, tracked)
-
-        zones["stop_line_strict"].trigger(tracked)
-        zones["stop_line_tolerance"].trigger(tracked)
-        zones["yield_ped_line"].trigger(tracked)
-
-        ann = frame.copy()
-        for r_annotator, r_label in zones["road_annotators"]:
-            ann = r_annotator.annotate(scene=ann, label=r_label)
-        for cw_annotator in zones["crosswalk_annotators"]:
-            ann = cw_annotator.annotate(scene=ann, label="Crosswalk")
-        for isl_annotator in zones["island_annotators"]:
-            ann = isl_annotator.annotate(scene=ann, label="Island")
-        for sw_annotator in zones["sidewalk_annotators"]:
-            ann = sw_annotator.annotate(scene=ann, label="Sidewalk")
-        ann = zones["line_annotator_strict"].annotate(frame=ann, line_counter=zones["stop_line_strict"])
-        ann = zones["line_annotator_tol"].annotate(frame=ann, line_counter=zones["stop_line_tolerance"])
-        ann = zones["line_annotator_yield"].annotate(frame=ann, line_counter=zones["yield_ped_line"])
-
-        x1, y1, x2, y2 = [int(v) for v in tl_bbox]
-        tl_color = (0, 0, 255) if tl_state == "RED" else (0, 255, 0)
-        cv2.rectangle(ann, (x1, y1), (x2, y2), tl_color, 3)
-        cv2.putText(ann, f"TL: {tl_state}", (x1 - 8, max(40, y1 - 12)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, tl_color, 2, cv2.LINE_AA)
-
-        labels = []
-        for i in range(len(tracked)):
-            t_id = tracked.tracker_id[i] if tracked.tracker_id is not None else -1
-            labels.append(f"#{t_id} {COCO_ROAD_USERS.get(int(tracked.class_id[i]), 'obj')}")
-        ann = box_annotator.annotate(scene=ann, detections=tracked)
-        ann = label_annotator.annotate(scene=ann, detections=tracked, labels=labels)
-
-        disp = cv2.resize(ann, (out_w, out_h))
-
-        # HUD panel (top-left)
-        hud = disp.copy()
-        cv2.rectangle(hud, (8, 8), (360, 64), (12, 12, 12), -1)
-        cv2.addWeighted(hud, 0.75, disp, 0.25, 0, disp)
-        cv2.rectangle(disp, (8, 8), (360, 64), (0, 255, 255), 1)
-        cv2.putText(disp, f"t={t_sec:6.1f}s  align=({dx:+d},{dy:+d})  tracks={len(tracked)}",
-                    (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(disp, f"TL: {tl_state}", (16, 54),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, tl_color, 1, cv2.LINE_AA)
-
-        # Active-event banner (bottom-left)
-        active = _active_labels(events, t_sec)
-        if active:
-            text = "EVENT: " + ", ".join(active)
-            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-            by = out_h - 14
-            cv2.rectangle(disp, (8, by - th - 10), (16 + tw, by + 6), (0, 0, 200), -1)
-            cv2.putText(disp, text, (13, by), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                        (255, 255, 255), 2, cv2.LINE_AA)
-
-        writer.write(disp)
-        written += 1
-        if progress_callback and written % 30 == 0:
-            total_est = max(1, (stop_frame - start_frame) // max(1, stride))
-            progress_callback(min(1.0, written / total_est))
-
-    writer.release()
-    cap.release()
+            disp = cv2.resize(ann, (out_w, out_h), interpolation=cv2.INTER_AREA)
+            cv2.rectangle(disp, (8, 8), (330, 58), (12, 12, 12), -1)
+            cv2.putText(disp, f"t={t:6.1f}s  tracks={len(obs.tids)}", (16, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(disp, f"signal: {sig}", (16, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, SIGNAL_BGR[sig], 1, cv2.LINE_AA)
+            active = _active_labels(events, t)
+            if active:
+                text = "EVENT: " + ", ".join(active)
+                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                by = out_h - 14
+                cv2.rectangle(disp, (8, by - th - 10), (16 + tw, by + 6), (0, 0, 200), -1)
+                cv2.putText(disp, text, (13, by), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            writer.write(disp)
+            written += 1
+            idx += 1
+            if progress_callback and written % 30 == 0:
+                progress_callback(min(1.0, (idx - start_f) / max(1, stop_f - start_f)))
+    finally:
+        writer.release()
+        cap.release()
     _transcode_h264(out_path)
     return out_path
 
 
 def _transcode_h264(path: str, crf: int = 28) -> None:
-    """Re-encode an mp4v render to compact H.264 (yuv420p) for web playback.
-
-    Uses the ffmpeg binary bundled with imageio-ffmpeg; silently keeps the
-    original file if no encoder is available.
-    """
+    """Re-encode the mp4v render to H.264 (yuv420p) for browser playback; keeps
+    the original if the bundled ffmpeg (imageio-ffmpeg) is unavailable."""
     try:
-        import subprocess
         import imageio_ffmpeg
 
-        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         src = Path(path)
         tmp = src.with_suffix(".h264.tmp.mp4")
         subprocess.run(
-            [ffmpeg, "-y", "-loglevel", "error", "-i", str(src),
+            [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(src),
              "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
              "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(tmp)],
             check=True,
         )
-        tmp.replace(src)
-    except Exception:
-        pass
+        for attempt in range(5):             # Windows may briefly hold the file open
+            try:
+                tmp.replace(src)
+                return
+            except PermissionError:
+                time.sleep(1.0 + attempt)
+        print(f"warning: could not replace {src} with its H.264 version ({tmp} kept)")
+    except Exception as exc:
+        print(f"warning: H.264 transcode skipped for {path}: {exc}")
 
 
 def load_events_for_video(predictions_path: str, video_name: str) -> list[list]:
-    """Pull the event list for one video out of a predictions JSON file."""
+    """Event list of one video from a predictions JSON file."""
     data = json.loads(Path(predictions_path).read_text())
     return data.get("videos", {}).get(video_name, {}).get("events", [])
 
@@ -239,8 +186,7 @@ def main() -> None:
 
     events = load_events_for_video(args.events, Path(args.video).name) if args.events else None
     render_annotated(
-        args.video, args.out,
-        events=events, width=args.width, stride=max(1, args.stride),
+        args.video, args.out, events=events, width=args.width, stride=max(1, args.stride),
         start_sec=args.start, end_sec=args.end,
         progress_callback=lambda p: print(f"\r{p * 100:5.1f}%", end="", flush=True),
     )
