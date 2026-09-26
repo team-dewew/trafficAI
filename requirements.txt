@@ -1,11 +1,11 @@
-torch==2.6.0
-torchvision==0.21.0
-ultralytics==8.4.161
-supervision==0.30.5
+torch>=2.9.0
+torchvision
+ultralytics
+supervision
 numpy>=1.26,<2.3
-opencv-python-headless==4.11.0.86
+opencv-python-headless
 lap>=0.5.12
-streamlit==1.64.0
+streamlit
 pandas>=2.2,<3
 imageio-ffmpeg==0.6.0
 plotly
