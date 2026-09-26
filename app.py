@@ -21,7 +21,7 @@ from src.registration import estimate_scene_transform
 from src.scene import build_scene
 
 REPO_URL = "https://github.com/DeWeWO/wiut"
-SPACE_URL = "https://huggingface.co/spaces/dewewo/TrafficAI-Web"
+SITE_URL = "https://trafficai.dewew.dev"
 DEMO_SAMPLE = Path("samples/demo/C3896_60-95s_720p.mp4")
 
 # ----------------------------------------------------------------------------
@@ -2153,7 +2153,7 @@ elif selected_section == "Links":
         st.markdown(card.format(title="predictions_samples.json", body=(
             "• Our output on the four sample videos, produced by the unchanged harness<br>"
             "• <code>python evaluate.py --pred predictions_samples.json --validate-only</code>: VALID, 0 errors, 0 warnings<br>"
-            f'• Website: <a href="{SPACE_URL}" target="_blank" style="color:#38bdf8;">{SPACE_URL.replace("https://", "")}</a>')),
+            f'• Website: <a href="{SITE_URL}" target="_blank" style="color:#38bdf8;">{SITE_URL.replace("https://", "")}</a>')),
             unsafe_allow_html=True)
         pred_p = Path("predictions_samples.json")
         if pred_p.exists():

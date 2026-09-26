@@ -1,6 +1,6 @@
 # Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
-**Team: dewew** · Website: https://huggingface.co/spaces/dewewo/TrafficAI-Web · Repository: https://github.com/DeWeWO/wiut
+**Team: dewew** · Website: https://trafficai.dewew.dev · Repository: https://github.com/DeWeWO/wiut
 
 The system watches a road-junction CCTV camera and does two things:
 
@@ -49,7 +49,9 @@ A `Dockerfile` (CUDA 12.4, Python 3.11) is also provided. Its header shows the b
 separate dependencies:
 
 - **Locally:** `pip install -r requirements-web.txt && streamlit run app.py`.
-- **Hugging Face Space:** `python scripts/build_space.py` writes `dist/space/`. That folder holds the site files, with
+- **Own server (the public website):** `deploy/install.sh` installs it on an Ubuntu server without a GPU, behind nginx with a
+  Let's Encrypt certificate (see `deploy/README.md`).
+- **Hugging Face Space (alternative):** `python scripts/build_space.py` writes `dist/space/`. That folder holds the site files, with
   `space/README.md` (the Space header) and the CPU `space/requirements.txt` as its root files. The Space is deployed from it, so
   the Space's settings never change the submission's requirements.
 
@@ -165,7 +167,8 @@ assets/scene_ref.jpg        reference frame for registration
 assets/examples/            one or two frames per detected class (website Results)
 assets/team/team.json       team page content (roles, contributions, links, previous projects)
 samples/previews/           annotated sample videos; samples/demo/ a 35 s 720p clip for the demo
-space/                      Hugging Face Space header + CPU requirements (see build_space.py)
+space/                      website CPU requirements + Hugging Face Space header (see build_space.py)
+deploy/                     self-hosted website: install/update/check/uninstall scripts (nginx, Let's Encrypt, systemd)
 weights/                    download.sh / download.py / SHA256SUMS
 app.py                      team website (Streamlit)
 ```
