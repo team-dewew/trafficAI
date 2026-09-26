@@ -33,8 +33,12 @@
       "role": "EDA & evaluation",
       "did": "Sample-video EDA and metadata extraction, the scene description notes the zones were drawn from, evaluation runs of the submission harness.",
       "skills": ["EDA", "Pandas", "FFmpeg", "Visualisation"],
-      "links": {},
-      "projects": []
+      "links": {"GitHub": "#", "LinkedIn": "#"},
+      "projects": [
+        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"},
+        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"},
+        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"}
+      ]
     }
   ]
 }
