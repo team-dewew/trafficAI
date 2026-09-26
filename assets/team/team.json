@@ -9,29 +9,29 @@
       "skills": ["PyTorch", "YOLO11", "OpenCV", "ByteTrack", "Streamlit"],
       "links": {"GitHub": "https://github.com/DeWeWO", "LinkedIn": "https://www.linkedin.com/in/dewew/"},
       "projects": [
-        {"name": "Hisobvaraq ERP", "url": "https://hisobvaraq.app", "desc": "Comprehensive multi-tenant ERP platform and backend architecture for distribution companies"},
-        {"name": "Sirius POS & CRM", "url": "https://sirius.dewew.dev/", "desc": "Fast POS cashier interface and CRM system for retail outlets"},
-        {"name": "Ali Robot", "url": "https://github.com/DeWeWO", "desc": "Central AI/LLM control modules for an autonomous humanoid robot"}
+        {"name": "Hisobvaraq ERP", "url": "https://hisobvaraq.app", "desc": "Multi-tenant ERP platform and backend for distributors"},
+        {"name": "Sirius POS & CRM", "url": "https://sirius.dewew.dev/", "desc": "Fast POS cashier interface and CRM system"},
+        {"name": "Ali Robot", "url": "https://github.com/DeWeWO", "desc": "AI/LLM control modules for a humanoid robot"}
       ]
     },
     {
       "name": "Seymonbek Ikramov",
       "photo": "assets/team/seymonbek.jpg",
       "role": "Anomaly model & Part B risk",
-      "did": "Integrated and gated the open-weights crash/fire model; built the causal Part B risk estimator (time-to-collision on collision courses).",
+      "did": "Integrated the crash/fire model and built the causal Part B risk estimator.",
       "skills": ["PyTorch", "YOLOv8", "NumPy", "Risk modelling"],
       "links": {"GitHub": "https://github.com/Seymonbek", "LinkedIn": "https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/"},
       "projects": [
-        {"name": "Denta_CRM", "url": "https://github.com/Seymonbek/Denta_CRM", "desc": "Advanced Django REST backend automating dental clinic operations, including odontograms, scheduling, and billing"},
-        {"name": "SkillSwap_AI", "url": "https://github.com/Seymonbek/SkillSwap_AI", "desc": "Comprehensive Django REST and WebSocket backend for a skills bartering and freelancing platform"},
-        {"name": "Ratsiya Backend", "url": "https://github.com/Seymonbek", "desc": "Real-time walkie-talkie audio dispatch system built with FastAPI and WebSockets for operator-driver communication"}
+        {"name": "Denta_CRM", "url": "https://github.com/Seymonbek/Denta_CRM", "desc": "Django REST backend automating dental clinic operations"},
+        {"name": "SkillSwap_AI", "url": "https://github.com/Seymonbek/SkillSwap_AI", "desc": "Django backend for a skills bartering platform"},
+        {"name": "Ratsiya Backend", "url": "https://github.com/Seymonbek", "desc": "Real-time walkie-talkie audio dispatch system"}
       ]
     },
     {
       "name": "Soliyev Siroj",
       "photo": "assets/team/siroj.jpg",
       "role": "EDA & evaluation",
-      "did": "Sample-video EDA and metadata extraction, the scene description notes the zones were drawn from, evaluation runs of the submission harness.",
+      "did": "Sample-video EDA, metadata extraction, scene mapping, and harness evaluations.",
       "skills": ["EDA", "Pandas", "FFmpeg", "Visualisation"],
       "links": {"GitHub": "#", "LinkedIn": "#"},
       "projects": [
