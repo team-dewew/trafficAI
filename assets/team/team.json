@@ -9,9 +9,9 @@
       "skills": ["PyTorch", "YOLO11", "OpenCV", "ByteTrack", "Streamlit"],
       "links": {"GitHub": "https://github.com/DeWeWO", "LinkedIn": "https://www.linkedin.com/in/dewew/"},
       "projects": [
-        {"name": "Hisobvaraq ERP", "url": "https://hisobvaraq.app", "desc": "Distribyutsiya korxonalari uchun keng qamrovli ERP va backend arxitekturasi"},
-        {"name": "Sirius POS & CRM", "url": "https://sirius.dewew.dev/", "desc": "Savdo nuqtalari uchun tezkor POS kassir interfeysi va CRM tizimi"},
-        {"name": "Ali Robot", "url": "https://github.com/DeWeWO", "desc": "Gumanoid robotning markaziy intellektual boshqaruv (AI/LLM) modullari"}
+        {"name": "Hisobvaraq ERP", "url": "https://hisobvaraq.app", "desc": "Comprehensive multi-tenant ERP platform and backend architecture for distribution companies"},
+        {"name": "Sirius POS & CRM", "url": "https://sirius.dewew.dev/", "desc": "Fast POS cashier interface and CRM system for retail outlets"},
+        {"name": "Ali Robot", "url": "https://github.com/DeWeWO", "desc": "Central AI/LLM control modules for an autonomous humanoid robot"}
       ]
     },
     {
