@@ -5,3 +5,9 @@ supervision==0.30.5
 numpy>=1.26,<2.3
 opencv-python-headless==4.11.0.86
 lap>=0.5.12
+streamlit==1.64.0
+pandas>=2.2,<3
+imageio-ffmpeg==0.6.0
+plotly
+pytest>=8
+ruff>=0.6
