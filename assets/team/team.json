@@ -22,9 +22,9 @@
       "skills": ["PyTorch", "YOLOv8", "NumPy", "Risk modelling"],
       "links": {"GitHub": "https://github.com/Seymonbek", "LinkedIn": "https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/"},
       "projects": [
-        {"name": "Denta_CRM", "url": "https://github.com/Seymonbek/Denta_CRM", "desc": "Python CRM for a dental clinic"},
-        {"name": "SkillSwap_AI", "url": "https://github.com/Seymonbek/SkillSwap_AI", "desc": "Python backend (with a separate JavaScript frontend)"},
-        {"name": "News_Site", "url": "https://github.com/Seymonbek/News_Site", "desc": "News site created with Django"}
+        {"name": "Denta_CRM", "url": "https://github.com/Seymonbek/Denta_CRM", "desc": "Advanced Django REST backend automating dental clinic operations, including odontograms, scheduling, and billing"},
+        {"name": "SkillSwap_AI", "url": "https://github.com/Seymonbek/SkillSwap_AI", "desc": "Comprehensive Django REST and WebSocket backend for a skills bartering and freelancing platform"},
+        {"name": "Ratsiya Backend", "url": "https://github.com/Seymonbek", "desc": "Real-time walkie-talkie audio dispatch system built with FastAPI and WebSockets for operator-driver communication"}
       ]
     },
     {
