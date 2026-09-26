@@ -1,6 +1,7 @@
 import base64
 import html
 import json
+import threading
 import uuid
 import warnings
 from pathlib import Path
@@ -1002,6 +1003,12 @@ def sample_zone_overlay(video_name: str) -> np.ndarray | None:
     return cv2.resize(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB), (1280, 720), interpolation=cv2.INTER_AREA)
 
 
+@st.cache_resource
+def demo_lock() -> threading.Lock:
+    """Shared by every visitor (one process, one thread per session): one demo at a time."""
+    return threading.Lock()
+
+
 def preview_path(video_name: str) -> str | None:
     p = Path("samples/previews") / f"{Path(video_name).stem}_preview.mp4"
     return str(p) if p.exists() else None
@@ -1949,10 +1956,19 @@ elif selected_section == "Live Demo":
             bar.progress(min(1.0, max(0.0, frac)))
             status.markdown(f"`{msg}`")
 
+        lock = demo_lock()
+        if not lock.acquire(blocking=False):
+            status.warning("Another visitor's video is being processed right now. The server runs one demo at a "
+                           "time to stay within its memory; please press Run again in a minute.")
+            st.stop()
         try:
             result = run_demo(target_path, session_dir / "clips", uuid.uuid4().hex[:8], progress=on_progress)
         except Exception as exc:  # show the error instead of a blank page
+            result = None
             st.error(f"The pipeline failed on this file: {exc}")
+        finally:
+            lock.release()
+        if result is None:
             st.stop()
         status.success(f"Done in {result.elapsed:.0f} s ({result.elapsed / max(1e-9, result.duration):.1f}x the clip length).")
         st.session_state["demo_result"] = (video_key, result, target_path, display_name)

@@ -31,6 +31,7 @@ DEMO_SETTINGS = {
     "stride": 6,
     "use_anomaly": False,
     "budget_factor": 1e9,      # no time guard in the demo; progress is shown instead
+    "max_width": 1280,         # frames are downscaled right after decoding (RAM on small servers)
 }
 DEMO_MAX_SEC = 120.0
 DEMO_MAX_MB = 300
@@ -64,7 +65,7 @@ def _clip_windows(events: list[list], duration: float) -> list[tuple[float, floa
 
 
 def render_clips(video_path: str, events: list[list], obs: list, scene: dict, signal, duration: float,
-                 out_dir: Path, tag: str, progress=None) -> list[tuple[str, str]]:
+                 out_dir: Path, tag: str, progress=None, frame_scale: float = 1.0) -> list[tuple[str, str]]:
     """Annotated clips around the events, drawn from the stored tracks (no detector)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     times = np.array([o.t for o, _ in obs]) if obs else np.zeros(0)
@@ -85,7 +86,9 @@ def render_clips(video_path: str, events: list[list], obs: list, scene: dict, si
             idx += 1
             if idx % 2:                       # 12-15 fps output is enough for review
                 continue
-            img = draw_scene(frame.copy(), scene)
+            if frame_scale < 1.0:             # same pixel grid as the scene and the stored boxes
+                frame = cv2.resize(frame, None, fx=frame_scale, fy=frame_scale, interpolation=cv2.INTER_AREA)
+            img = draw_scene(frame, scene)
             if len(times):
                 o = obs[int(np.clip(np.searchsorted(times, t, side="right") - 1, 0, len(obs) - 1))][0]
                 for tid, box, name in zip(o.tids, o.boxes, o.names):
@@ -138,7 +141,8 @@ def run_demo(video_path: str, clip_dir: Path, tag: str, progress=None) -> DemoRe
     clips = []
     if events:
         clips = render_clips(video_path, events, obs, diag["scene"], diag["signal"], diag["duration"], clip_dir, tag,
-                             progress=lambda f: say(0.85 + 0.14 * f, "Rendering annotated event clips ..."))
+                             progress=lambda f: say(0.85 + 0.14 * f, "Rendering annotated event clips ..."),
+                             frame_scale=diag.get("frame_scale", 1.0))
     say(1.0, "Done")
     info = {"registration": diag.get("registration"), "signal_phases": diag.get("signal_phases"),
             "frames_processed": len(obs)}

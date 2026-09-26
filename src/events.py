@@ -27,7 +27,7 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
     keys of config.PERCEPTION (used by the website's CPU demo; the submission uses defaults)."""
     cfg = {**PERCEPTION, **(settings or {})}
     t_start = time.perf_counter()
-    scene, reg_info = open_scene(video_path)
+    A, reg_info = estimate_scene_transform(sample_frames(video_path))
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -35,6 +35,15 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration = n_frames / fps if n_frames > 0 else 0.0
+
+    # Optional downscale right after decoding (website demo on a small server: a 4K
+    # frame is 25 MB). The scene is mapped into the same reduced pixel grid.
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    max_width = cfg.get("max_width")
+    frame_scale = min(1.0, max_width / width) if max_width and width > 0 else 1.0
+    if frame_scale < 1.0:
+        A = A * frame_scale
+    scene = build_scene(A)
 
     stride = int(cfg["stride"])
     perception = Perception(fps, stride, settings=cfg)
@@ -53,6 +62,8 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
             ok, frame = cap.read()
             if not ok or frame is None:
                 break
+            if frame_scale < 1.0:
+                frame = cv2.resize(frame, None, fx=frame_scale, fy=frame_scale, interpolation=cv2.INTER_AREA)
             t = idx / fps
             raw = classify(lamp_scores(frame, scene["main_signal_lamps"], scene["px_scale"]))
             signal.update(t, raw)
@@ -85,6 +96,7 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
         "duration": duration,
         "scene": scene,
         "signal": signal,
+        "frame_scale": frame_scale,
     }
     return events, diag
 
