@@ -26,7 +26,18 @@ python evaluate.py --pred predictions.json --validate-only
 |---|---|---|---|
 | `yolo11l.pt` | road-user detector (Part A) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
 | `yolov8n.pt` | light detector (Part B) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
-| `accident_model.pt` | YOLOv8x crash-severity / fire / smoke detector | [Enos-123/accident-evaluator-yolov8x](https://huggingface.co/Enos-123/accident-evaluator-yolov8x), file `weights/epoch90.pt` | Ultralytics YOLOv8 fine-tune (AGPL-3.0). The training data of this checkpoint is not documented on its model card. |
+| `accident_model.pt` | YOLOv8x crash-severity / fire / smoke detector (classes: detected-injury, fire, high / medium / low severity, smoke) | [Enos-123/accident-evaluator-yolov8x](https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights): the file `weights/epoch90.pt`, downloaded as-is and renamed to `accident_model.pt` (checksum in `weights/SHA256SUMS`) | MIT (as declared on the model card) |
+
+### Datasets
+
+We trained nothing ourselves. The datasets below are the ones behind the pretrained weights we use:
+
+| dataset | used through | licence |
+|---|---|---|
+| COCO 2017 | `yolo11l.pt`, `yolov8n.pt` (Ultralytics pretrained) | CC BY 4.0 (annotations) |
+| Roboflow "Accident Evaluator" | `accident_model.pt` (named as its training set on the model card) | not stated on the model card; the card links no dataset page |
+
+No other data was used. The scene layout was drawn by hand on a frame of the provided sample videos.
 
 After the download, nothing else is fetched: the code loads weights only from
 `weights/` and raises an error instead of downloading anything.

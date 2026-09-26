@@ -1484,7 +1484,7 @@ elif selected_section == "Problem and Approach":
                 <div class="callout-card callout-success">
                     <div class="callout-title">Accident / fire / smoke</div>
                     <div class="callout-body">
-                        • <b>Model</b>: YOLOv8x fine-tuned for crash severity and fire/smoke (<code>weights/accident_model.pt</code>)<br>
+                        • <b>Model</b>: open-weights YOLOv8x fine-tuned on the Roboflow "Accident Evaluator" dataset for crash severity and fire/smoke (<code>epoch90.pt</code> from Enos-123/accident-evaluator-yolov8x, MIT, used unchanged)<br>
                         • <b>Rate</b>: once per second of video<br>
                         • <b>Gate</b>: confidence >= 0.6, box on the carriageway and covering a vehicle, positive in >= 3 of 4 consecutive checks.
                         Without the gate it fired on ordinary traffic.
@@ -2514,7 +2514,7 @@ elif selected_section == "Links":
                 <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Model Weights</div>
                 <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
                     • <b>Primary</b>: <code>weights/yolo11l.pt</code> (Ultralytics release)<br>
-                    • <b>Anomaly</b>: <code>weights/accident_model.pt</code> — <a href="https://huggingface.co/Enos-123/accident-evaluator-yolov8x" target="_blank" style="color: #38bdf8;">Hugging Face source</a><br>
+                    • <b>Anomaly</b>: <code>weights/accident_model.pt</code> — <a href="https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights" target="_blank" style="color: #38bdf8;">Hugging Face</a> (<code>weights/epoch90.pt</code>, renamed; MIT)<br>
                     • <b>Estimator</b>: <code>weights/yolov8n.pt</code> (Ultralytics release)<br>
                     • <b>Fetcher</b>: <code>bash weights/download.sh</code> (one command, ~190 MB total)
                 </div>

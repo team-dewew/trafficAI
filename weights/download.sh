@@ -3,7 +3,8 @@
 # Sources:
 #   yolo11l.pt        Ultralytics official release (AGPL-3.0)
 #   yolov8n.pt        Ultralytics official release (AGPL-3.0)
-#   accident_model.pt Enos-123/accident-evaluator-yolov8x (Hugging Face, weights/epoch90.pt)
+#   accident_model.pt Enos-123/accident-evaluator-yolov8x (Hugging Face, weights/epoch90.pt,
+#                     renamed; MIT per model card; trained on Roboflow "Accident Evaluator")
 set -e
 
 WEIGHTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
