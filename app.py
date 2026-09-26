@@ -585,302 +585,219 @@ st.markdown(
     }
 
     /* =========================================================================
-       SIDEBAR: MODERN SLEEK NAV (LINEAR / VERCEL STYLE)
+       SIDEBAR: MODERN SLEEK NAV (PREMIUM)
        ========================================================================= */
     section[data-testid="stSidebar"] {
         background: #030712 !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-        padding-top: 0 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
     }
     
-    [data-testid="stSidebarContent"] {
-        padding-top: 0 !important;
+    [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
+        padding: 0 !important;
     }
 
-    /* Collapse Streamlit default sidebar header so it takes 0 vertical space */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 2px !important;
+    }
+
     [data-testid="stSidebarHeader"] {
-        height: 0 !important;
-        min-height: 0 !important;
-        max-height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        position: relative !important;
-        border: none !important;
-        background: transparent !important;
+        height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; display: none !important;
     }
 
-    /* Position the open/close collapse button (<<) comfortably in the brand row */
-    [data-testid="stSidebarCollapseButton"] {
-        position: absolute !important;
-        top: 18px !important;
-        right: 12px !important;
-        z-index: 999999 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        display: flex !important;
-        align-items: center !important;
+    [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapsedControl"] {
+        display: none !important;
     }
 
-    [data-testid="stSidebarCollapseButton"] button {
-        background: rgba(15, 23, 42, 0.8) !important;
-        border: 1px solid rgba(56, 189, 248, 0.25) !important;
-        border-radius: 6px !important;
-        width: 26px !important;
-        height: 26px !important;
-        min-width: 26px !important;
-        min-height: 26px !important;
-        padding: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        color: #94a3b8 !important;
-        transition: all 0.2s ease !important;
-    }
-
-    [data-testid="stSidebarCollapseButton"] button:hover {
-        background: rgba(30, 41, 59, 1) !important;
-        border-color: #00f2fe !important;
-        color: #00f2fe !important;
-    }
-
-    [data-testid="stSidebarCollapseButton"] button svg {
-        fill: currentColor !important;
-        stroke: currentColor !important;
-        width: 14px !important;
-        height: 14px !important;
-    }
-
-    /* Expand sidebar button (>>) when collapsed */
-    [data-testid="stSidebarCollapsedControl"] {
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 999999 !important;
-    }
-    [data-testid="stSidebarCollapsedControl"] button {
-        background: rgba(15, 23, 42, 0.9) !important;
-        border: 1px solid rgba(56, 189, 248, 0.3) !important;
-        border-radius: 6px !important;
-        color: #00f2fe !important;
-    }
-
-    /* Sidebar Content: Clean, professional padding */
     section[data-testid="stSidebar"] .block-container {
-        padding-top: 18px !important;
-        padding-bottom: 20px !important;
-        padding-left: 12px !important;
-        padding-right: 12px !important;
+        padding: 24px 16px !important;
     }
 
-    /* Brand Bar */
     .sidebar-brand-minimal {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 0 34px 0 2px;
-        margin-bottom: 4px;
-        height: 28px;
+        justify-content: space-between;
+        padding: 0 4px;
+        margin-bottom: 8px;
     }
     .brand-left {
         display: flex;
         align-items: center;
-        gap: 7px;
+        gap: 8px;
     }
     .brand-dot {
-        width: 7px;
-        height: 7px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: #00f2fe;
-        box-shadow: 0 0 8px #00f2fe;
+        box-shadow: 0 0 10px #00f2fe;
     }
     .brand-title {
         font-family: 'Space Grotesk', sans-serif;
-        font-size: 1.05rem;
+        font-size: 1.15rem;
         font-weight: 800;
         color: #f8fafc;
-        letter-spacing: -0.2px;
+        letter-spacing: -0.3px;
     }
     .brand-highlight {
         color: #00f2fe;
     }
     .brand-status-tag {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.62rem;
+        font-size: 0.6rem;
         font-weight: 700;
         color: #10b981;
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        padding: 1px 6px;
-        border-radius: 10px;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 3px 6px;
+        border-radius: 4px;
         letter-spacing: 0.5px;
     }
+    
     .sidebar-subtext {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.66rem;
+        font-size: 0.68rem;
         color: #64748b;
-        margin-top: 3px;
-        margin-bottom: 12px;
-        padding-left: 2px;
+        padding: 0 4px;
+        margin-bottom: 20px;
     }
 
-    /* Laser Divider */
     .sidebar-divider {
         height: 1px;
-        background: rgba(255, 255, 255, 0.08);
-        margin: 12px 0 14px 0;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        margin: 16px 0;
         width: 100%;
     }
 
-    /* Section Label */
     .sidebar-section-label {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.66rem;
+        font-size: 0.64rem;
         font-weight: 700;
         color: #64748b;
-        letter-spacing: 1.3px;
+        letter-spacing: 1.5px;
         text-transform: uppercase;
-        margin-bottom: 6px;
-        padding-left: 6px;
+        margin-bottom: 8px;
+        padding-left: 8px;
     }
 
-    /* Sidebar Navigation Items: Sleek, Flat, Modern (Linear / Vercel style) */
     section[data-testid="stSidebar"] div[data-testid="stElementContainer"]:has(.stButton) {
-        margin-bottom: 2px !important;
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    section[data-testid="stSidebar"] div.stButton {
         margin: 0 !important;
         padding: 0 !important;
     }
-    section[data-testid="stSidebar"] .stButton > button,
-    section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
-    section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"] {
+    section[data-testid="stSidebar"] .stButton > button {
         width: 100% !important;
-        min-height: 38px !important;
-        height: 38px !important;
-        padding: 0 12px !important;
+        min-height: 40px !important;
+        height: 40px !important;
+        padding: 0 14px !important;
+        margin-bottom: 4px !important;
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
         justify-content: flex-start !important;
         text-align: left !important;
-        border-radius: 6px !important;
-        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
-        font-size: 0.84rem !important;
+        border-radius: 8px !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 0.88rem !important;
         font-weight: 500 !important;
-        letter-spacing: -0.01em !important;
-        transition: all 0.15s ease !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         border: 1px solid transparent !important;
         background: transparent !important;
         box-shadow: none !important;
-        outline: none !important;
     }
 
-    /* Inactive Nav Item: Transparent, Unobtrusive */
-    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"],
-    section[data-testid="stSidebar"] .stButton > button[kind="secondary"],
-    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
-        background: transparent !important;
-        border: 1px solid transparent !important;
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
         color: #94a3b8 !important;
-        box-shadow: none !important;
     }
-    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"]:hover,
-    section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
-    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        color: #f8fafc !important;
-        transform: none !important;
+    section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-color: rgba(255, 255, 255, 0.06) !important;
+        color: #f1f5f9 !important;
+        transform: translateX(2px) !important;
     }
 
-    /* Active Nav Item: Refined Accent */
-    section[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"],
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: rgba(14, 165, 233, 0.12) !important;
-        border: 1px solid rgba(56, 189, 248, 0.22) !important;
+        background: linear-gradient(90deg, rgba(14, 165, 233, 0.15), transparent) !important;
+        border: 1px solid rgba(56, 189, 248, 0.2) !important;
         border-left: 3px solid #00f2fe !important;
         color: #38bdf8 !important;
         font-weight: 600 !important;
-        box-shadow: none !important;
-        transform: none !important;
     }
 
-    /* Inner Button Elements */
-    section[data-testid="stSidebar"] .stButton > button div[data-testid="stMarkdownContainer"],
-    section[data-testid="stSidebar"] .stButton > button div,
-    section[data-testid="stSidebar"] .stButton > button div p,
+    section[data-testid="stSidebar"] .stButton > button div {
+        display: flex !important; align-items: center !important; width: 100% !important; margin: 0 !important; padding: 0 !important;
+    }
     section[data-testid="stSidebar"] .stButton > button p {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        text-align: left !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        line-height: 1 !important;
+        margin: 0 !important; padding: 0 !important;
     }
 
-    /* Clean Runtime Specs Card */
     .sidebar-specs-card {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 12px 14px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.4) 0%, rgba(10, 15, 28, 0.8) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 12px;
     }
     .specs-title {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 0.66rem;
+        font-size: 0.62rem;
         font-weight: 700;
         color: #38bdf8;
-        letter-spacing: 1px;
-        margin-bottom: 8px;
-        padding-bottom: 5px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        letter-spacing: 1.2px;
+        margin-bottom: 12px;
         text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .specs-title::before {
+        content: ""; width: 4px; height: 4px; background: #38bdf8; border-radius: 50%;
     }
     .specs-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 4px 0;
-        font-size: 0.76rem;
-        font-family: 'JetBrains Mono', monospace;
+        padding: 6px 0;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+    }
+    .specs-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
     }
     .specs-label {
-        color: #94a3b8;
-        font-size: 0.74rem;
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 500;
     }
     .specs-val {
-        color: #f1f5f9;
+        color: #e2e8f0;
+        font-family: 'JetBrains Mono', monospace;
         font-weight: 600;
-        background: rgba(30, 41, 59, 0.6);
-        padding: 2px 6px;
+        font-size: 0.68rem;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 3px 6px;
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.06);
-        font-size: 0.72rem;
     }
     .specs-val.emerald {
         color: #10b981;
-        background: rgba(16, 185, 129, 0.12);
-        border-color: rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.25);
     }
     .specs-val.cyan {
         color: #00f2fe;
-        background: rgba(0, 242, 254, 0.12);
-        border-color: rgba(0, 242, 254, 0.3);
+        background: rgba(0, 242, 254, 0.1);
+        border-color: rgba(0, 242, 254, 0.25);
     }
 
-    /* Minimal Footer */
     .sidebar-footer-minimal {
-        padding: 10px 2px 2px 2px;
-        font-size: 0.68rem;
-        color: #64748b;
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 0.65rem;
+        color: #475569;
         text-align: center;
         font-family: 'JetBrains Mono', monospace;
+        letter-spacing: 0.5px;
     }
-
     /* Callout Cards */
     .callout-card {
         background: rgba(15, 23, 42, 0.6);
