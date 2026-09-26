@@ -49,9 +49,10 @@ def main() -> None:
             sink: list = []
             t0 = time.perf_counter()
             events, diag = run_part_a(video, obs_sink=sink)
+            info = {k: v for k, v in diag.items() if k not in ("scene", "signal")}
             with open(cache_file, "wb") as f:
-                pickle.dump({"obs": sink, "diag": diag}, f)
-            print(f"{name}: cached {len(sink)} frames in {time.perf_counter() - t0:.0f}s; diag={json.dumps(diag)[:300]}")
+                pickle.dump({"obs": sink, "diag": info}, f)
+            print(f"{name}: cached {len(sink)} frames in {time.perf_counter() - t0:.0f}s; diag={json.dumps(info)[:300]}")
         else:
             with open(cache_file, "rb") as f:
                 data = pickle.load(f)

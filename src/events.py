@@ -20,9 +20,12 @@ def open_scene(video_path: str) -> tuple[dict, dict]:
     return build_scene(A), info
 
 
-def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = None) -> tuple[list[list], dict]:
+def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = None,
+               settings: dict | None = None) -> tuple[list[list], dict]:
     """Return (events, diagnostics). `obs_sink`, if given, receives (observation, raw_signal)
-    for every processed frame so the rules can be replayed offline."""
+    for every processed frame so the rules can be replayed offline. `settings` overrides
+    keys of config.PERCEPTION (used by the website's CPU demo; the submission uses defaults)."""
+    cfg = {**PERCEPTION, **(settings or {})}
     t_start = time.perf_counter()
     scene, reg_info = open_scene(video_path)
 
@@ -33,8 +36,8 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration = n_frames / fps if n_frames > 0 else 0.0
 
-    stride = int(PERCEPTION["stride"])
-    perception = Perception(fps, stride)
+    stride = int(cfg["stride"])
+    perception = Perception(fps, stride, settings=cfg)
     signal = SignalState()
     engine = RuleEngine(scene, signal)
 
@@ -63,8 +66,8 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
             # Time guard: the harness budget is 3x duration for Part A + Part B together
             # (Part B needs ~0.7x). If perception runs slower than `budget_factor` x
             # real time, halve its rate for the rest of the video instead of failing.
-            if stride == PERCEPTION["stride"] and idx > fps * 30 and (idx // stride) % 30 == 0:
-                if time.perf_counter() - t_loop > PERCEPTION["budget_factor"] * (idx / fps):
+            if stride == cfg["stride"] and idx > fps * 30 and (idx // stride) % 30 == 0:
+                if time.perf_counter() - t_loop > cfg["budget_factor"] * (idx / fps):
                     stride *= 2
     finally:
         cap.release()
@@ -79,6 +82,9 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
         "frames": idx,
         "signal_phases": [(s, round(t, 2)) for s, t in signal.phases],
         "part_a_sec": round(time.perf_counter() - t_start, 1),
+        "duration": duration,
+        "scene": scene,
+        "signal": signal,
     }
     return events, diag
 

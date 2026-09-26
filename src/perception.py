@@ -59,10 +59,12 @@ def suppress_duplicate_vehicles(det: sv.Detections, iou_thr: float) -> sv.Detect
 
 
 class Perception:
-    def __init__(self, fps: float, stride: int, use_anomaly: bool = True) -> None:
-        cfg = PERCEPTION
+    def __init__(self, fps: float, stride: int, use_anomaly: bool = True, settings: dict | None = None) -> None:
+        cfg = {**PERCEPTION, **(settings or {})}
+        use_anomaly = use_anomaly and cfg.get("use_anomaly", True)
         self.detector = load_yolo(cfg["detector"])
         self.anomaly_model = load_yolo(cfg["anomaly_model"]) if use_anomaly else None
+        self.dup_iou = cfg["dup_iou"]
         self.tracker = make_tracker(fps, stride)
         self.imgsz = cfg["imgsz"]
         self.conf = cfg["conf"]
@@ -73,7 +75,7 @@ class Perception:
     def __call__(self, frame: np.ndarray, t: float) -> Observation:
         res = predict(self.detector, frame, imgsz=self.imgsz, conf=self.conf, classes=self._classes)
         det = sv.Detections.from_ultralytics(res)
-        det = suppress_duplicate_vehicles(det, PERCEPTION["dup_iou"])
+        det = suppress_duplicate_vehicles(det, self.dup_iou)
         det = self.tracker.update_with_detections(det)
         if det.tracker_id is None or len(det) == 0:
             obs = Observation(t, np.zeros(0, int), np.zeros((0, 4)), [], np.zeros(0))

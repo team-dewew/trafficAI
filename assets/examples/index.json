@@ -1,0 +1,82 @@
+[
+ {
+  "label": "congestion",
+  "file": "assets/examples/congestion_0.jpg",
+  "video": "C3905.MP4",
+  "start": 89.9,
+  "end": 112.7,
+  "signal": "RED"
+ },
+ {
+  "label": "failure_to_yield",
+  "file": "assets/examples/failure_to_yield_0.jpg",
+  "video": "C3897.MP4",
+  "start": 55.6,
+  "end": 57.9,
+  "signal": "GREEN"
+ },
+ {
+  "label": "failure_to_yield",
+  "file": "assets/examples/failure_to_yield_1.jpg",
+  "video": "C3896.MP4",
+  "start": 46.6,
+  "end": 48.7,
+  "signal": "GREEN"
+ },
+ {
+  "label": "jaywalking",
+  "file": "assets/examples/jaywalking_0.jpg",
+  "video": "C3902.MP4",
+  "start": 271.6,
+  "end": 291.5,
+  "signal": "GREEN"
+ },
+ {
+  "label": "jaywalking",
+  "file": "assets/examples/jaywalking_1.jpg",
+  "video": "C3896.MP4",
+  "start": 165.0,
+  "end": 184.7,
+  "signal": "RED"
+ },
+ {
+  "label": "red_light",
+  "file": "assets/examples/red_light_0.jpg",
+  "video": "C3896.MP4",
+  "start": 78.9,
+  "end": 93.9,
+  "signal": "RED"
+ },
+ {
+  "label": "stop_line",
+  "file": "assets/examples/stop_line_0.jpg",
+  "video": "C3905.MP4",
+  "start": 77.4,
+  "end": 114.8,
+  "signal": "RED"
+ },
+ {
+  "label": "stop_line",
+  "file": "assets/examples/stop_line_1.jpg",
+  "video": "C3896.MP4",
+  "start": 291.7,
+  "end": 327.6,
+  "signal": "RED"
+ },
+ {
+  "label": "stopped_vehicle",
+  "file": "assets/examples/stopped_vehicle_0.jpg",
+  "video": "C3897.MP4",
+  "start": 223.4,
+  "end": 242.9,
+  "signal": "RED"
+ },
+ {
+  "label": "stopped_vehicle",
+  "file": "assets/examples/stopped_vehicle_1.jpg",
+  "video": "C3905.MP4",
+  "start": 12.9,
+  "end": 27.6,
+  "signal": "RED"
+ }
+]

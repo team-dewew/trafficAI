@@ -1,14 +1,10 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.9.0
-torchvision
-ultralytics
-supervision
+# Submission environment (organizers' GPU machine). Pinned: the results in
+# README / predictions_samples.json were produced with these versions.
+# The website has its own CPU dependency set in space/requirements.txt.
+torch==2.6.0
+torchvision==0.21.0
+ultralytics==8.4.161
+supervision==0.30.5
 numpy>=1.26,<2.3
-opencv-python-headless
+opencv-python-headless==4.11.0.86
 lap>=0.5.12
-streamlit
-pandas>=2.2,<3
-imageio-ffmpeg==0.6.0
-plotly
-pytest>=8
-ruff>=0.6

@@ -53,6 +53,8 @@ samples/*
 # Annotated web previews stay committed — the website's Results section needs them
 !samples/previews/
 !samples/previews/*.mp4
+!samples/demo/
+!samples/demo/*.mp4
 
 # Large Model Weights (Keep weights/download.sh, but ignore weight files > 100MB)
 *.pt
@@ -98,3 +100,5 @@ devset/clips/
 tests/data/
 .pytest_cache/
 .ruff_cache/
+dist/
+.claude/

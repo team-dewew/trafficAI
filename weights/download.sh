@@ -3,6 +3,7 @@
 # Sources:
 #   yolo11l.pt        Ultralytics official release (AGPL-3.0)
 #   yolov8n.pt        Ultralytics official release (AGPL-3.0)
+#   yolo11s.pt        Ultralytics official release (AGPL-3.0), used only by the website's CPU demo
 #   accident_model.pt Enos-123/accident-evaluator-yolov8x (Hugging Face, weights/epoch90.pt,
 #                     renamed; MIT per model card; trained on Roboflow "Accident Evaluator")
 set -e
@@ -16,6 +17,10 @@ fi
 
 if [ ! -f "$WEIGHTS_DIR/yolov8n.pt" ]; then
     curl -fL --retry 3 -o "$WEIGHTS_DIR/yolov8n.pt" "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt"
+fi
+
+if [ ! -f "$WEIGHTS_DIR/yolo11s.pt" ]; then
+    curl -fL --retry 3 -o "$WEIGHTS_DIR/yolo11s.pt" "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt"
 fi
 
 # Secondary anomaly detector (accident / fire / smoke), fine-tuned YOLOv8x.

@@ -8,8 +8,10 @@ from src.paths import WEIGHTS_DIR
 
 _MODEL_CACHE: dict[str, YOLO] = {}
 
-USE_HALF = torch.cuda.is_available()   # FP16 inference on GPU, FP32 on CPU
-DEVICE = 0 if torch.cuda.is_available() else "cpu"
+# is_available() can be True with zero visible devices (CUDA_VISIBLE_DEVICES=""), so check both.
+HAS_GPU = torch.cuda.is_available() and torch.cuda.device_count() > 0
+USE_HALF = HAS_GPU                     # FP16 inference on GPU, FP32 on CPU
+DEVICE = 0 if HAS_GPU else "cpu"
 
 
 def load_yolo(name: str) -> YOLO:

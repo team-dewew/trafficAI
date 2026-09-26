@@ -1,6 +1,7 @@
 import base64
+import html
 import json
-import time
+import uuid
 import warnings
 from pathlib import Path
 
@@ -13,18 +14,14 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from solution import CLASSES, RiskEstimator, detect_events
-from src.annotate import draw_scene, render_annotated
-from src.events import open_scene
+from src.annotate import draw_scene
+from src.demo import DEMO_MAX_MB, DEMO_MAX_SEC, run_demo
+from src.registration import estimate_scene_transform
+from src.scene import build_scene
 
-# Live demo constraints (stated publicly per the hackathon website rubric:
-# "State the size and length you accept (2 minutes is enough)").
-DEMO_MAX_DURATION_SEC = 125.0  # 2 minutes + small tolerance
-DEMO_MAX_CLIPS = 5             # annotated event clips rendered per demo run
-_DEMO_CACHE_KEYS = (
-    "cached_video", "cached_video_key", "cached_display_name", "cached_events",
-    "cached_risk", "cached_timestamps", "cached_elapsed", "cached_clips",
-)
+REPO_URL = "https://github.com/DeWeWO/wiut"
+SPACE_URL = "https://huggingface.co/spaces/dewewo/TrafficAI-Web"
+DEMO_SAMPLE = Path("samples/demo/C3896_60-95s_720p.mp4")
 
 # ----------------------------------------------------------------------------
 # Page Configuration
@@ -33,7 +30,7 @@ st.set_page_config(
     page_title="Traffic AI — Surveillance Control Center",
     page_icon=":material/sensors:",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 # ----------------------------------------------------------------------------
@@ -969,51 +966,45 @@ def get_video_metadata(video_path: str) -> dict:
         return {}
 
 
-@st.cache_data(show_spinner=False)
-def render_zone_overlay(video_path: str) -> np.ndarray | None:
-    """Frame 0 with the scene layout registered onto this video (same code path as Part A)."""
+def show_image(img, caption: str | None = None) -> None:
+    """st.image at full width on any Streamlit version (the keyword was renamed in 1.40)."""
     try:
-        p = Path(video_path).resolve()
-        if not p.exists():
-            return None
-        cap = cv2.VideoCapture(str(p))
-        ret, frame = cap.read()
-        cap.release()
-        if not ret or frame is None:
-            return None
-        scene, _ = open_scene(str(p))
-        vis = draw_scene(frame.copy(), scene)
-        return cv2.resize(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB), (1280, 720))
-    except Exception:
+        st.image(img, caption=caption, width="stretch")
+    except TypeError:                   # Streamlit < 1.46
+        st.image(img, caption=caption, use_column_width=True)
+
+
+@st.cache_data(show_spinner=False)
+def sample_scene_stats() -> dict:
+    """Per sample video, from its committed first frame: registration against the
+    reference frame and measured brightness (so the page never needs the 4K videos)."""
+    out = {}
+    for f in sorted(Path("eda_results/frames").glob("*_first_frame.jpg")):
+        img = cv2.imread(str(f))
+        if img is None:
+            continue
+        _, info = estimate_scene_transform([img])
+        gray = float(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).mean())
+        light = "day, bright sun" if gray > 85 else ("late afternoon, low sun" if gray > 55 else "dusk")
+        out[f.name.split("_")[0] + ".MP4"] = {"info": info, "gray": round(gray, 1), "light": light, "frame": str(f)}
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def sample_zone_overlay(video_name: str) -> np.ndarray | None:
+    """Scene layout registered onto the sample's first frame (no video file needed)."""
+    f = Path("eda_results/frames") / f"{Path(video_name).stem}_first_frame.jpg"
+    img = cv2.imread(str(f))
+    if img is None:
         return None
+    A, _ = estimate_scene_transform([img])
+    vis = draw_scene(img.copy(), build_scene(A))
+    return cv2.resize(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB), (1280, 720), interpolation=cv2.INTER_AREA)
 
 
-def get_preview_media(target_path: str, selected_file_name: str) -> tuple[bytes | None, str]:
-    """
-    Returns (video_bytes, status_description) for instant video playback.
-    Uses pre-rendered 720p web clips for sample videos to eliminate socket crashes & lag.
-    """
-    target_p = Path(target_path).resolve()
-    stem = Path(selected_file_name).stem
-    preview_file = Path("samples/previews") / f"{stem}_preview.mp4"
-    if preview_file.exists():
-        try:
-            with open(preview_file, "rb") as f:
-                return f.read(), f"Full Duration Web Preview ({preview_file.stat().st_size / (1024*1024):.1f} MB)"
-        except Exception:
-            pass
-
-    if target_p.exists():
-        sz = target_p.stat().st_size
-        if sz <= 150 * 1024 * 1024:
-            try:
-                with open(target_p, "rb") as f:
-                    return f.read(), f"Direct Stream ({sz / (1024*1024):.1f} MB)"
-            except Exception as e:
-                return None, f"Error: {e}"
-        else:
-            return None, f"Ultra-HD 4K Raw Feed ({sz / (1024**3):.2f} GB). Ready for GPU inference."
-    return None, "Video file not found."
+def preview_path(video_name: str) -> str | None:
+    p = Path("samples/previews") / f"{Path(video_name).stem}_preview.mp4"
+    return str(p) if p.exists() else None
 
 
 @st.cache_data(show_spinner=False)
@@ -1085,7 +1076,7 @@ def render_page_header(
     title: str,
     subtitle: str,
     badge_text: str = "SYSTEM ACTIVE",
-    mini_spec: str = "CUDA FP16",
+    mini_spec: str = "",
 ):
     """Render a unified, senior-grade page top header across all modules."""
     st.markdown(
@@ -1158,7 +1149,7 @@ with st.sidebar:
         if st.button(
             btn_label,
             key=f"nav_btn_{item['id']}",
-            use_container_width=True,
+            width="stretch",
             type="primary" if is_active else "secondary",
         ):
             st.session_state["selected_section"] = item["id"]
@@ -1182,15 +1173,19 @@ with st.sidebar:
                 <span class="specs-val">ByteTrack (Causal)</span>
             </div>
             <div class="specs-row">
-                <span class="specs-label">Hardware Device</span>
-                <span class="specs-val emerald">NVIDIA RTX 3050</span>
+                <span class="specs-label">Benchmark run</span>
+                <span class="specs-val emerald">GPU (RTX 3050)</span>
+            </div>
+            <div class="specs-row">
+                <span class="specs-label">Web demo</span>
+                <span class="specs-val">CPU, light mode</span>
             </div>
             <div class="specs-row">
                 <span class="specs-label">Determinism</span>
                 <span class="specs-val cyan">Seed 42 Locked</span>
             </div>
         </div>
-        <div class="sidebar-footer-minimal">v2.4 • Deterministic Evaluation</div>
+        <div class="sidebar-footer-minimal">Team dewew · WIUT Hackathon 2026</div>
         """,
         unsafe_allow_html=True,
     )
@@ -1207,125 +1202,40 @@ if selected_section == "Team":
         eyebrow_suffix="PERSONNEL ROSTER",
         title="Engineering Squad",
         subtitle="Westminster International University in Tashkent (WIUT) AI Hackathon 2026 • Computer Vision Track",
-        badge_text="ACTIVE SQUAD",
-        mini_spec="CUDA FP16",
+        badge_text="TEAM",
+        mini_spec="3 members",
     )
 
-    ollabergan_b64 = get_image_base64("assets/team/ollabergan.jpg")
-    seymonbek_b64 = get_image_base64("assets/team/seymonbek.jpg")
-    siroj_b64 = get_image_base64("assets/team/siroj.jpg")
-
-    m1, m2, m3 = st.columns(3, gap="large")
-
-    with m1:
-        st.markdown(
-            f"""
-            <div class="team-badge-card">
-                <div class="team-avatar-ring">
-                    <img src="{ollabergan_b64}" class="team-avatar-img" alt="Ollabergan" />
-                </div>
-                <div class="team-name">Ollabergan</div>
-                <div class="team-role-pill-wrapper">
-                    <span class="team-role-pill">LEAD CV & FULL-STACK AI ARCHITECT</span>
-                </div>
-                <div class="team-bio">
-                    Architected the end-to-end system: hand-calibrated scene layout, per-video scene registration, tracking and event rules, and the Streamlit website.
-                </div>
-                <div class="team-skills">
-                    <span class="skill-chip">PyTorch</span>
-                    <span class="skill-chip">YOLO11</span>
-                    <span class="skill-chip">Spatial Vector</span>
-                    <span class="skill-chip">OpenCV</span>
-                    <span class="skill-chip">ByteTrack</span>
-                    <span class="skill-chip">Streamlit</span>
-                    <span class="skill-chip">CUDA FP16</span>
-                </div>
-                <div class="team-links-wrapper">
-                    <a class="btn-link" href="https://github.com/DeWeWO" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                        GitHub
-                    </a>
-                    <a class="btn-link" href="https://www.linkedin.com/in/dewew/" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-                        LinkedIn
-                    </a>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    team = json.loads(Path("assets/team/team.json").read_text(encoding="utf-8"))["members"]
+    cols = st.columns(len(team), gap="large")
+    for col, m in zip(cols, team):
+        esc = html.escape
+        links = "".join(
+            f'<a class="btn-link" href="{esc(u)}" target="_blank">{esc(k)}</a>' for k, u in m.get("links", {}).items()
         )
-
-    with m2:
-        st.markdown(
-            f"""
-            <div class="team-badge-card">
-                <div class="team-avatar-ring">
-                    <img src="{seymonbek_b64}" class="team-avatar-img" alt="Seymonbek Ikramov" />
-                </div>
-                <div class="team-name">Seymonbek Ikramov</div>
-                <div class="team-role-pill-wrapper">
-                    <span class="team-role-pill">DEEP LEARNING & CAUSAL RISK SPECIALIST</span>
-                </div>
-                <div class="team-bio">
-                    Integrated the open-weights YOLOv8x crash/fire model (Hugging Face) and its gating, and designed the causal Part B risk estimator (time-to-collision on collision courses).
-                </div>
-                <div class="team-skills">
-                    <span class="skill-chip">PyTorch</span>
-                    <span class="skill-chip">YOLOv8x</span>
-                    <span class="skill-chip">Anomaly Detection</span>
-                    <span class="skill-chip">Risk Estimator</span>
-                    <span class="skill-chip">Time-To-Collision</span>
-                    <span class="skill-chip">NumPy</span>
-                    <span class="skill-chip">Data Modeling</span>
-                </div>
-                <div class="team-links-wrapper">
-                    <a class="btn-link" href="https://github.com/Seymonbek" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                        GitHub
-                    </a>
-                    <a class="btn-link" href="https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-                        LinkedIn
-                    </a>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        skills = "".join(f'<span class="skill-chip">{esc(x)}</span>' for x in m.get("skills", []))
+        projects = "".join(
+            f'<li><a href="{esc(p["url"])}" target="_blank" style="color:#38bdf8;">{esc(p["name"])}</a> - {esc(p["desc"])}</li>'
+            for p in m.get("projects", [])
         )
-
-    with m3:
-        st.markdown(
-            f"""
-            <div class="team-badge-card">
-                <div class="team-avatar-ring">
-                    <img src="{siroj_b64}" class="team-avatar-img" alt="Soliyev Siroj" />
-                </div>
-                <div class="team-name">Soliyev Siroj</div>
-                <div class="team-role-pill-wrapper">
-                    <span class="team-role-pill">DATA OPS &amp; EVALUATION ENGINEER</span>
-                </div>
-                <div class="team-bio">
-                    Owned sample-video EDA and metadata extraction, dev-set annotation conventions, benchmark/ablation runs against official evaluate.py, and annotated result-video rendering pipelines.
-                </div>
-                <div class="team-skills">
-                    <span class="skill-chip">EDA</span>
-                    <span class="skill-chip">Annotation</span>
-                    <span class="skill-chip">evaluate.py</span>
-                    <span class="skill-chip">FFmpeg</span>
-                    <span class="skill-chip">Pandas</span>
-                    <span class="skill-chip">Visualization</span>
-                    <span class="skill-chip">Metrics Audit</span>
-                </div>
-                <div class="team-links-wrapper">
-                    <a class="btn-link" href="https://github.com/DeWeWO/wiut" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px; margin-right:5px;"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                        GitHub
-                    </a>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        proj_html = (
+            '<div class="team-bio"><div style="text-align:left;"><b>Previous projects</b>'
+            f'<ul style="margin:6px 0 0 18px;padding:0;">{projects}</ul></div></div>'
+        ) if projects else ""
+        # One line of HTML: blank or indented lines would be read as Markdown code blocks.
+        card = (
+            '<div class="team-badge-card">'
+            f'<div class="team-avatar-ring"><img src="{get_image_base64(m["photo"])}" class="team-avatar-img" alt="{esc(m["name"])}" /></div>'
+            f'<div class="team-name">{esc(m["name"])}</div>'
+            f'<div class="team-role-pill-wrapper"><span class="team-role-pill">{esc(m["role"]).upper()}</span></div>'
+            f'<div class="team-bio"><div><b>Did in this project:</b> {esc(m["did"])}</div></div>'
+            f'{proj_html}'
+            f'<div class="team-skills">{skills}</div>'
+            f'<div class="team-links-wrapper">{links}</div>'
+            '</div>'
         )
+        with col:
+            st.markdown(card, unsafe_allow_html=True)
 
     st.markdown(
         """
@@ -1378,7 +1288,7 @@ elif selected_section == "Problem and Approach":
         eyebrow_suffix="SYSTEM ARCHITECTURE",
         title="Problem Statement & Technical Approach",
         subtitle="YOLO11-L + ByteTrack + per-video scene registration + rule engine; YOLOv8x anomaly model for crashes and fire",
-        badge_text="PIPELINE VERIFIED",
+        badge_text="APPROACH",
         mini_spec="3.0x BUDGET COMPLIANT",
     )
 
@@ -1598,9 +1508,21 @@ elif selected_section == "EDA of sample videos":
             "Duration (s)": [340.3, 317.8, 317.8, 127.6],
             "Time Budget (3.0x)": ["1,021 s", "953 s", "953 s", "383 s"],
         })
-    video_stats["Lighting Condition"] = ["Daylight / Heavy Traffic", "Daylight / Dense Queue", "Evening / Overexposed Glare", "Daylight / Rapid Flow"][: len(video_stats)]
-    video_stats["AI Offset Detected"] = ["dx=+7, dy=-24", "dx=-10, dy=-18", "dx=-94, dy=+37", "dx=+1, dy=-8"][: len(video_stats)]
-    st.dataframe(video_stats, use_container_width=True)
+    stats = sample_scene_stats()
+    vids = list(video_stats["Video ID"])
+    video_stats["Lighting (measured)"] = [
+        f"{stats[v]['light']} (mean grey {stats[v]['gray']})" if v in stats else "-" for v in vids
+    ]
+    video_stats["Camera drift vs reference"] = [
+        (lambda i: f"dx={i['dx_4k']:+.0f}px dy={i['dy_4k']:+.0f}px rot={i['rot_deg']:+.2f} deg scale={i['scale']:.3f}")(stats[v]["info"])
+        if v in stats and stats[v]["info"].get("status") == "ok" else "-" for v in vids
+    ]
+    st.dataframe(video_stats, width="stretch")
+    st.caption(
+        "Lighting is the mean grey level of each video's first frame. Camera drift is the SIFT + RANSAC similarity "
+        "between that frame and the reference frame the zones were drawn on: the pose differs between recordings, "
+        "so every video is registered before the rules run."
+    )
 
     st.markdown(
         """
@@ -1657,11 +1579,11 @@ elif selected_section == "EDA of sample videos":
         with sp1:
             if heatmaps:
                 sel_heat = st.selectbox("Feed:", [p.stem.replace("_heatmap", "") for p in heatmaps], key="eda_heat_feed")
-                st.image(str(eda_dir / f"{sel_heat}_heatmap.png"), caption=f"Occupancy heatmap — {sel_heat}: where road users actually concentrate (lane corridors, queue pockets, crosswalks).", use_container_width=True)
+                show_image(str(eda_dir / f"{sel_heat}_heatmap.png"), caption=f"Occupancy heatmap - {sel_heat}: where road users actually concentrate (lane corridors, queue pockets, crosswalks).")
         with sp2:
             if trajectories:
                 sel_traj = st.selectbox("Feed:", [p.stem.replace("_trajectories", "") for p in trajectories], key="eda_traj_feed")
-                st.image(str(eda_dir / f"{sel_traj}_trajectories.png"), caption=f"Vehicle trajectory trails — {sel_traj}: dominant lane vectors used to calibrate wrong-way direction rules.", use_container_width=True)
+                show_image(str(eda_dir / f"{sel_traj}_trajectories.png"), caption=f"Vehicle trajectory trails - {sel_traj}: the two carriageways flow in opposite directions along the median; this is the lane flow the wrong-way and red-light rules use.")
 
     # Numbers below are computed from the committed EDA artefacts, not typed in.
     flow_lines = []
@@ -1712,156 +1634,167 @@ elif selected_section == "EDA of sample videos":
 elif selected_section == "Results on sample videos":
     render_page_header(
         module_num="04",
-        eyebrow_suffix="BENCHMARK VERIFICATION",
-        title="Official Benchmark Results",
-        subtitle="Validated using official evaluate.py on predictions_samples.json (All 4 feeds).",
-        badge_text="BENCHMARK VALIDATED",
-        mini_spec="0 ERRORS • 0 BLIPS",
+        eyebrow_suffix="SAMPLE VIDEOS",
+        title="Results on the Sample Videos",
+        subtitle="Output of python run_submission.py on the four samples (predictions_samples.json). There are no labels for the samples, so this is our output, not a score.",
+        badge_text="FORMAT VALID",
+        mini_spec="evaluate.py --validate-only",
     )
 
     benchmark_data = load_benchmark_data()
     videos_dict = benchmark_data.get("videos", {})
-    bench_log = benchmark_data.get("log", {}) if isinstance(benchmark_data, dict) else {}
-    total_runtime = sum(float(v.get("total_sec", 0) or 0) for v in bench_log.values()) if isinstance(bench_log, dict) else 0.0
-    total_budget = sum(float(v.get("budget_sec", 0) or 0) for v in bench_log.values()) if isinstance(bench_log, dict) else 0.0
-    all_within_budget = all(
-        float(v.get("total_sec", 0) or 0) <= float(v.get("budget_sec", 1) or 1)
-        for v in bench_log.values()
-    ) if isinstance(bench_log, dict) and bench_log else True
-
-    total_evs = sum(len(v.get("events", [])) for v in videos_dict.values()) if videos_dict else 290
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.markdown(
-            f'<div class="metric-card"><div class="metric-value">{total_evs}</div>'
-            '<div class="metric-label">High-Confidence Events</div>'
-            '<div class="metric-sub">Merged, zero blips (<0.5s)</div></div>',
-            unsafe_allow_html=True,
-        )
-    with m2:
-        runtime_pct = f" ({100.0 * total_runtime / total_budget:.1f}% used)" if total_budget > 0 else ""
-        st.markdown(
-            f'<div class="metric-card"><div class="metric-value">{total_runtime:,.0f} s</div>'
-            '<div class="metric-label">Total Execution Time</div>'
-            f'<div class="metric-sub">Allowed: {total_budget:,.0f}s{runtime_pct}</div></div>',
-            unsafe_allow_html=True,
-        )
-    with m3:
-        st.markdown(
-            f'<div class="metric-card"><div class="metric-value">{"100% OK" if all_within_budget else "CHECK"}</div>'
-            '<div class="metric-label">Budget Adherence</div>'
-            '<div class="metric-sub">Strict 3.0x limit respected</div></div>',
-            unsafe_allow_html=True,
-        )
-    with m4:
-        st.markdown(
-            '<div class="metric-card"><div class="metric-value">0 Errors</div>'
-            '<div class="metric-label">evaluate.py Validation</div>'
-            '<div class="metric-sub">0 Warnings • Clean Submission</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown(
-        """
-        <div class="section-header-block">
-            <div class="section-eyebrow">EVALUATION METRICS</div>
-            <h2 class="section-heading-h2">Per-Video Benchmark Breakdown</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    # Per-video breakdown built from the harness log embedded in predictions_samples.json
     log_dict = benchmark_data.get("log", {}) if isinstance(benchmark_data, dict) else {}
-    bench_rows = []
-    for vid in ["C3896.MP4", "C3897.MP4", "C3902.MP4", "C3905.MP4"]:
-        v_log = log_dict.get(vid, {}) if isinstance(log_dict, dict) else {}
-        dur = float(v_log.get("duration", 0) or 0)
-        budget = float(v_log.get("budget_sec", dur * 3) or dur * 3)
-        runtime = float(v_log.get("total_sec", 0) or 0)
-        n_err = len(v_log.get("errors", []) or [])
-        bench_rows.append({
-            "Video ID": vid,
-            "Duration": f"{dur:.1f} s",
-            "Allowed Budget (3x)": f"{budget:,.0f} s",
-            "Actual Runtime": f"{runtime:.1f} s" if runtime else "—",
-            "Budget Used": f"{100.0 * runtime / budget:.1f}%" if runtime and budget else "—",
-            "Events (>=0.5s)": len(videos_dict.get(vid, {}).get("events", [])),
-            "Risk Samples": len(videos_dict.get(vid, {}).get("risk", [])),
-            "Harness Status": "PASS (0 err)" if n_err == 0 else f"{n_err} note(s)",
-        })
-    benchmark_table = pd.DataFrame(bench_rows)
-    st.dataframe(benchmark_table, use_container_width=True)
+    stats = sample_scene_stats()
+    total_runtime = sum(float(v.get("total_sec", 0) or 0) for v in log_dict.values())
+    total_budget = sum(float(v.get("budget_sec", 0) or 0) for v in log_dict.values())
+    total_evs = sum(len(v.get("events", [])) for v in videos_dict.values())
+    worst = max((float(v.get("total_sec", 0)) / max(1e-9, float(v.get("duration", 1))) for v in log_dict.values()), default=0.0)
+
+    m1, m2, m3, m4 = st.columns(4)
+    for col, value, label, sub in (
+        (m1, f"{total_evs}", "Events", "4 videos, 18 min of footage"),
+        (m2, f"{total_runtime:,.0f} s", "Runtime (Part A + B)", f"budget {total_budget:,.0f} s"),
+        (m3, f"{worst:.2f}x", "Slowest video", "of its duration (limit 3x)"),
+        (m4, "VALID", "evaluate.py format check", "0 errors, 0 warnings"),
+    ):
+        with col:
+            st.markdown(
+                f'<div class="metric-card"><div class="metric-value">{value}</div>'
+                f'<div class="metric-label">{label}</div><div class="metric-sub">{sub}</div></div>',
+                unsafe_allow_html=True,
+            )
 
     st.markdown(
         """
         <div class="section-header-block">
-            <div class="section-eyebrow">DEEP TELEMETRY</div>
-            <h2 class="section-heading-h2">Interactive Feed Inspector</h2>
+            <div class="section-eyebrow">PER VIDEO</div>
+            <h2 class="section-heading-h2">Runtime and output per sample</h2>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    rows = []
+    for vid in sorted(videos_dict):
+        lg = log_dict.get(vid, {})
+        evs = videos_dict[vid].get("events", [])
+        counts = pd.Series([e[2] for e in evs]).value_counts().to_dict() if evs else {}
+        risk = videos_dict[vid].get("risk", [])
+        rows.append({
+            "Video": vid,
+            "Lighting": stats.get(vid, {}).get("light", "-"),
+            "Duration (s)": round(float(lg.get("duration", 0)), 1),
+            "Part A (s)": lg.get("part_a_sec"),
+            "Part B (s)": lg.get("part_b_sec"),
+            "Total / duration": f"{float(lg.get('total_sec', 0)) / max(1e-9, float(lg.get('duration', 1))):.2f}x",
+            "Events": len(evs),
+            "By class": ", ".join(f"{k} {n}" for k, n in sorted(counts.items())),
+            "Risk >= 0.5": f"{100 * sum(1 for _, r in risk if r >= 0.5) / max(1, len(risk)):.2f}% of frames",
+        })
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    st.caption("Measured on a laptop RTX 3050 with the unchanged harness. Harness log errors: none.")
 
-    feed_choice = st.selectbox(
-        "Select Benchmark Video Feed to Inspect:",
-        ["C3896.MP4 (Daytime Traffic - 5m 40s)", "C3897.MP4 (Dense Traffic - 5m 18s)", "C3902.MP4 (Evening Shifted - 5m 18s)", "C3905.MP4 (Short Daytime - 2m 08s)"],
+    st.markdown(
+        """
+        <div class="section-header-block">
+            <div class="section-eyebrow">INSPECTOR</div>
+            <h2 class="section-heading-h2">Annotated video, event timeline and risk curve</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    feed_key = feed_choice.split()[0]
-    feed_path = f"samples/{feed_key}"
+    feed_names = sorted(videos_dict)
+    feed_key = st.selectbox(
+        "Sample video:",
+        feed_names,
+        format_func=lambda v: f"{v}  ({stats.get(v, {}).get('light', '')}, {float(log_dict.get(v, {}).get('duration', 0)) / 60:.1f} min)",
+        key="results_feed",
+    )
+    feed_events = sorted(videos_dict.get(feed_key, {}).get("events", []))
+    feed_duration = float(log_dict.get(feed_key, {}).get("duration", 0) or 0)
 
-    insp_tab1, insp_tab2, insp_tab3 = st.tabs(["Stream Playback & Map", "Detected Events Timeline", "Causal Risk Curve P(t)"])
-
-    with insp_tab1:
-        f_col1, f_col2 = st.columns(2)
-        with f_col1:
-            st.markdown("#### Video Preview (Instant Web Stream)")
-            f_bytes, f_desc = get_preview_media(feed_path, feed_key)
-            if f_bytes is not None:
-                st.video(f_bytes)
-                st.caption(f"Stream: `{feed_key}` • {f_desc}")
+    tab_video, tab_risk, tab_scene = st.tabs(["Annotated video & events", "Risk curve (Part B)", "Scene registration"])
+    with tab_video:
+        v_col, e_col = st.columns([1.15, 0.85], gap="large")
+        with e_col:
+            st.markdown("#### Event timeline")
+            if feed_events:
+                render_event_timeline(feed_events, feed_duration)
+                options = ["(from the start)"] + [f"{e[2]}  {e[0]:.1f}-{e[1]:.1f} s" for e in feed_events]
+                pick = st.selectbox("Jump the video to an event:", options, key=f"jump_{feed_key}")
+                start_at = 0 if pick == options[0] else max(0, int(feed_events[options.index(pick) - 1][0]) - 1)
+                df_evs = pd.DataFrame(feed_events, columns=["Start (s)", "End (s)", "Class"])
+                df_evs["Duration (s)"] = (df_evs["End (s)"] - df_evs["Start (s)"]).round(2)
+                st.dataframe(df_evs, width="stretch", height=260, hide_index=True)
             else:
-                st.info(f_desc)
-        with f_col2:
-            st.markdown("#### 21-Zone Calibrated Spatial Map")
-            zone_img = render_zone_overlay(feed_path)
-            if zone_img is not None:
-                st.image(zone_img, caption="Calibrated Intersection Geometry (Stop Line, Jam Line, Zebras, Lanes)", use_container_width=True)
+                start_at = 0
+                st.info("No events for this video.")
+        with v_col:
+            st.markdown("#### Annotated playback")
+            pv = preview_path(feed_key)
+            if pv:
+                st.video(pv, start_time=start_at)
+                st.caption(
+                    "Rendered with src/annotate.py: registered zones, tracked road users, signal read from the lamps, "
+                    "and a red banner while an event is active (every 2nd frame, 960 px wide)."
+                )
             else:
-                st.info("Spatial calibration overlay not available.")
+                st.info("Annotated preview not found in samples/previews/.")
 
-    with insp_tab2:
-        feed_events = videos_dict.get(feed_key, {}).get("events", [])
-        if feed_events:
-            feed_meta = get_video_metadata(f"samples/{feed_key}")
-            feed_duration = float(feed_meta.get("duration_sec", 0) or 0) if feed_meta else 0.0
-            st.markdown("#### Event Timeline (per class)")
-            render_event_timeline(feed_events, feed_duration)
-
-            df_evs = pd.DataFrame(feed_events, columns=["Start (s)", "End (s)", "Violation Label"])
-            df_evs["Duration (s)"] = (df_evs["End (s)"] - df_evs["Start (s)"]).round(3)
-
-            classes_found = sorted(df_evs["Violation Label"].unique())
-            sel_classes = st.multiselect("Filter by Event Class:", classes_found, default=classes_found, key=f"filter_{feed_key}")
-            filtered_evs = df_evs[df_evs["Violation Label"].isin(sel_classes)]
-
-            st.dataframe(filtered_evs, use_container_width=True, height=280)
-            st.caption(f"Showing {len(filtered_evs)} of {len(df_evs)} detected events in `{feed_key}`.")
-        else:
-            st.info(f"No events found for {feed_key} in benchmark predictions.")
-
-    with insp_tab3:
+    with tab_risk:
         feed_risks = videos_dict.get(feed_key, {}).get("risk", [])
         if feed_risks:
-            sampled_risks = feed_risks[::10]
-            chart_df = pd.DataFrame({
-                "Accident Risk P(t)": [round(pt[1], 4) for pt in sampled_risks],
-                "Alarm Threshold (0.50)": [0.50] * len(sampled_risks),
-            }, index=[round(pt[0], 1) for pt in sampled_risks])
-
-            st.line_chart(chart_df, color=["#00f2fe", "#ef4444"])
-            st.caption(f"Temporal Risk Curve for `{feed_key}` (sampled every 10 frames). Red line shows official 0.50 alarm threshold.")
+            sampled = feed_risks[::10]
+            chart_df = pd.DataFrame(
+                {"Risk P(accident within 5 s)": [r for _, r in sampled], "Alarm threshold 0.5": [0.5] * len(sampled)},
+                index=pd.Index([t for t, _ in sampled], name="t (s)"),
+            )
+            st.line_chart(chart_df, color=["#00f2fe", "#ef4444"], height=300)
+            above = sum(1 for _, r in feed_risks if r >= 0.5)
+            st.caption(
+                f"Causal score from RiskEstimator.step (every 10th frame plotted). {above} of {len(feed_risks)} frames "
+                f"are at or above 0.5. The samples contain no accidents, so a quiet curve is the expected behaviour."
+            )
         else:
-            st.info(f"Risk data not available for {feed_key}.")
+            st.info("No risk curve for this video.")
+
+    with tab_scene:
+        z_col, i_col = st.columns([1.3, 0.7], gap="large")
+        with z_col:
+            zone_img = sample_zone_overlay(feed_key)
+            if zone_img is not None:
+                show_image(zone_img, caption="First frame with the scene layout mapped through this video's registration.")
+        with i_col:
+            info = stats.get(feed_key, {}).get("info", {})
+            st.markdown("#### Registration")
+            st.json(info)
+            st.caption("Similarity transform (shift, rotation, scale) from the reference frame to this video.")
+
+    # Examples of each detected class
+    ex_index = Path("assets/examples/index.json")
+    if ex_index.exists():
+        st.markdown(
+            """
+            <div class="section-header-block">
+                <div class="section-eyebrow">PER CLASS</div>
+                <h2 class="section-heading-h2">Examples of each class we detected</h2>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Frames taken inside detected events (scripts/make_examples.py). The road users that triggered the rule "
+            "are outlined in red. These are our detections, not verified ground truth: some are borderline, "
+            "as discussed under Honest failure cases."
+        )
+        examples = json.loads(ex_index.read_text())
+        labels = sorted({e["label"] for e in examples})
+        for lbl in labels:
+            st.markdown(f"**{lbl}**")
+            items = [e for e in examples if e["label"] == lbl]
+            ecols = st.columns(len(items) if len(items) > 1 else 2)
+            for c, e in zip(ecols, items):
+                with c:
+                    show_image(e["file"], caption=f"{e['video']} {e['start']}-{e['end']} s, signal {e['signal']}")
 
     st.markdown(
         """
@@ -1924,487 +1857,175 @@ elif selected_section == "Results on sample videos":
 elif selected_section == "Live Demo":
     render_page_header(
         module_num="05",
-        eyebrow_suffix="LIVE INFERENCE CONSOLE",
-        title="Live Video Analytics & Risk Console",
-        subtitle="Upload custom surveillance feeds (up to 10GB) or select calibrated benchmark feeds to execute end-to-end inference.",
-        badge_text="ENGINE READY",
-        mini_spec="REAL-TIME GPU INFERENCE",
+        eyebrow_suffix="LIVE DEMO",
+        title="Live Demo",
+        subtitle=f"Upload an .mp4 from this junction camera (up to {DEMO_MAX_SEC / 60:.0f} minutes and {DEMO_MAX_MB} MB) "
+                 "and get the detected events back with a timeline, the risk curve and annotated clips.",
+        badge_text="CPU DEMO",
+        mini_spec="YOLO11-S @768 · every 6th frame",
+    )
+    st.markdown(
+        f"""
+        <div class="glass-panel" style="margin-bottom: 14px;">
+            <div style="color:#94a3b8;font-size:0.88rem;line-height:1.6;">
+            <b>What runs here.</b> The submission pipeline (scene registration, signal read-out, tracking, the same rules and post-processing)
+            in a CPU-friendly setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model, and the risk curve computed from the same
+            causal tracks. The submission itself uses YOLO11-L at 960 px on every 3rd frame on a GPU, so results can differ slightly.<br>
+            <b>Accepted input.</b> .mp4 (H.264), at most {DEMO_MAX_SEC / 60:.0f} minutes and {DEMO_MAX_MB} MB, from the competition camera
+            (other cameras run, but the zones will not fit). <b>Expected time</b> on the free 2-vCPU host: about the clip length
+            for 720p and about 2x the clip length for 4K.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    # ------------------------------------------------------------------------
-    # State & Source Initialization
-    # ------------------------------------------------------------------------
-    if "live_input_mode" not in st.session_state:
-        st.session_state["live_input_mode"] = "benchmark"
+    if "session_id" not in st.session_state:
+        st.session_state["session_id"] = uuid.uuid4().hex[:12]
+    import tempfile
 
-    samples_dir = Path("samples")
-    if not samples_dir.exists():
-        samples_dir = (Path(__file__).resolve().parent / "samples")
+    session_dir = Path(tempfile.gettempdir()) / f"wiut_demo_{st.session_state['session_id']}"
+    session_dir.mkdir(parents=True, exist_ok=True)
 
-    known_samples = ["C3905.MP4", "C3896.MP4", "C3897.MP4", "C3902.MP4"]
-    found_samples = [s for s in known_samples if (samples_dir / s).exists()]
-    if not found_samples and samples_dir.exists():
-        found_samples = sorted([p.name for p in samples_dir.glob("*.mp4")] + [p.name for p in samples_dir.glob("*.MP4")])
+    sources = ["Upload a video"] + ([f"Bundled sample clip ({DEMO_SAMPLE.name})"] if DEMO_SAMPLE.exists() else [])
+    source = st.radio("Input", sources, horizontal=True, key="demo_source")
 
-    sample_labels = {
-        "C3905.MP4": "C3905.MP4 (Short Daytime - 2m 07s | 4K UHD)",
-        "C3896.MP4": "C3896.MP4 (Daytime Traffic - 5m 40s | 4K UHD)",
-        "C3897.MP4": "C3897.MP4 (Dense Traffic - 5m 17s | 4K UHD)",
-        "C3902.MP4": "C3902.MP4 (Evening Shifted - 5m 17s | 4K UHD)",
-    }
-
-    if "live_bench_choice" not in st.session_state:
-        st.session_state["live_bench_choice"] = found_samples[0] if found_samples else None
-
-    # Pre-resolve target video path before rendering columns
-    target_video_path = None
-    display_name = ""
-    video_key = None  # identity used for result caching (never bare paths)
-
-    if st.session_state["live_input_mode"] == "benchmark":
-        bench_sel = st.session_state.get("live_bench_choice")
-        if bench_sel and (samples_dir / bench_sel).exists():
-            target_video_path = str((samples_dir / bench_sel).resolve())
-            display_name = bench_sel
-            video_key = f"bench:{bench_sel}"
+    target_path, video_key = None, None
+    if source == "Upload a video":
+        up = st.file_uploader(
+            f"Upload .mp4 (max {DEMO_MAX_SEC / 60:.0f} min, {DEMO_MAX_MB} MB)", type=["mp4", "MP4"], key="demo_upload"
+        )
+        if up is not None:
+            up_id = f"{up.name}_{up.size}"
+            if st.session_state.get("demo_upload_id") != up_id:
+                dest = session_dir / f"upload_{uuid.uuid4().hex[:8]}.mp4"
+                dest.write_bytes(up.getbuffer())
+                st.session_state["demo_upload_id"] = up_id
+                st.session_state["demo_upload_path"] = str(dest)
+                st.session_state["demo_upload_name"] = up.name
+            target_path = st.session_state["demo_upload_path"]
+            video_key = f"upload:{up_id}"
+            display_name = st.session_state["demo_upload_name"]
     else:
-        target_video_path = st.session_state.get("uploaded_video_path")
-        display_name = st.session_state.get("uploaded_display_name", "")
-        if target_video_path:
-            video_key = f"upload:{st.session_state.get('last_uploaded_id')}"
+        target_path, video_key, display_name = str(DEMO_SAMPLE), f"sample:{DEMO_SAMPLE.name}", DEMO_SAMPLE.name
 
-    # ------------------------------------------------------------------------
-    # Two-Column Command Deck: Left = Video/Spatial | Right = Controls/Telemetry
-    # ------------------------------------------------------------------------
-    col_feed, col_deck = st.columns([1.18, 0.82], gap="large")
-
-    # LEFT COLUMN: Stream Player & 21-Zone Geometric Map
-    with col_feed:
-        st.markdown(
-            """
-            <div class="section-header-block" style="margin-top: 0;">
-                <div class="section-eyebrow">STEP 01 // STREAM PREVIEW & SPATIAL GEOMETRY</div>
-                <h2 class="section-heading-h2">Active Surveillance Stream</h2>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if target_video_path is not None and Path(target_video_path).exists():
-            preview_tabs = st.tabs(["Video Stream Playback", "21-Zone Geometric Map"])
-
-            with preview_tabs[0]:
-                preview_bytes, preview_status = get_preview_media(target_video_path, display_name)
-                if preview_bytes is not None:
-                    st.video(preview_bytes)
-                    st.caption(f"Active Feed: `{display_name}` • {preview_status}")
-                else:
-                    st.info(f"{preview_status}")
-
-            with preview_tabs[1]:
-                zone_vis = render_zone_overlay(target_video_path)
-                if zone_vis is not None:
-                    st.image(
-                        zone_vis,
-                        caption="Vectorized Spatial Calibration: Red Stop Line, Yellow Jam Line, Blue Zebras, Magenta Dividers, Green Travel Lanes",
-                        use_container_width=True,
-                    )
-                else:
-                    st.caption("Spatial calibration map unavailable for this feed.")
+    meta = get_video_metadata(target_path) if target_path else {}
+    problems = []
+    if target_path:
+        if not meta or meta.get("total_frames", 0) <= 0:
+            problems.append("The file could not be read as a video.")
         else:
-            st.info("Select or upload a video feed on the right to activate real-time stream playback.")
+            if meta["duration_sec"] > DEMO_MAX_SEC + 1:
+                problems.append(f"The clip is {meta['duration_sec'] / 60:.1f} min; the demo accepts up to {DEMO_MAX_SEC / 60:.0f} min. "
+                                "Full-length videos run offline with run_submission.py.")
+            if meta["size_mb"] > DEMO_MAX_MB:
+                problems.append(f"The file is {meta['size_mb']:.0f} MB; the demo accepts up to {DEMO_MAX_MB} MB.")
+        c1, c2, c3, c4 = st.columns(4)
+        for col, lbl, val in ((c1, "Resolution", meta.get("resolution", "-")), (c2, "Frame rate", f"{meta.get('fps', '-')} fps"),
+                              (c3, "Duration", f"{meta.get('duration_sec', '-')} s"), (c4, "Size", f"{meta.get('size_mb', '-')} MB")):
+            with col:
+                st.markdown(f'<div class="metric-card"><div class="metric-label">{lbl}</div><div class="metric-value" style="font-size:1.3rem;">{val}</div></div>',
+                            unsafe_allow_html=True)
+        for msg in problems:
+            st.error(msg)
 
-    # RIGHT COLUMN: Source Selector, Telemetry HUD & Trigger
-    with col_deck:
-        st.markdown(
-            """
-            <div class="section-header-block" style="margin-top: 0;">
-                <div class="section-eyebrow">STEP 02 // INGEST & TELEMETRY CONTROLS</div>
-                <h2 class="section-heading-h2">Feed Config & HUD Telemetry</h2>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    run = st.button("Run the pipeline (Part A + Part B)", type="primary", width="stretch",
+                    disabled=not target_path or bool(problems), key="demo_run")
 
-        # Segmented Pill Mode Switcher (Benchmark vs Upload)
-        active_mode = st.session_state.get("live_input_mode", "benchmark")
-        b_c1, b_c2 = st.columns(2)
-        with b_c1:
-            if st.button("Benchmark Feeds (4)", type="primary" if active_mode == "benchmark" else "secondary", use_container_width=True, key="btn_mode_bench"):
-                st.session_state["live_input_mode"] = "benchmark"
-                st.rerun()
-        with b_c2:
-            if st.button("Upload Feed (.mp4)", type="primary" if active_mode == "upload" else "secondary", use_container_width=True, key="btn_mode_upload"):
-                st.session_state["live_input_mode"] = "upload"
-                st.rerun()
+    if run:
+        import importlib.util
 
-        # Ingest Control: Benchmark Select or File Uploader
-        if active_mode == "benchmark":
-            if found_samples:
-                curr_idx = found_samples.index(st.session_state["live_bench_choice"]) if st.session_state.get("live_bench_choice") in found_samples else 0
-                chosen_sample = st.selectbox(
-                    "Benchmark Stream Feed:",
-                    options=found_samples,
-                    index=curr_idx,
-                    format_func=lambda s: sample_labels.get(s, s),
-                    key="sel_bench_feed",
-                )
-                if chosen_sample != st.session_state.get("live_bench_choice"):
-                    st.session_state["live_bench_choice"] = chosen_sample
-                    st.rerun()
-            else:
-                st.error("No sample videos detected in `samples/` directory.")
-        else:
-            uploaded_file = st.file_uploader(
-                "Upload Surveillance Feed (.mp4) — max 2 minutes, up to 500 MB",
-                type=["mp4", "MP4"],
-                help="Demo limit (per hackathon guidance): clips up to ~2 minutes / 500 MB. CPU/GPU inference runs live in your browser session.",
-                key="file_uploader_deck",
-            )
-            if uploaded_file is not None:
-                import tempfile
-                import uuid
-                if "session_id" not in st.session_state:
-                    st.session_state["session_id"] = str(uuid.uuid4())
-                current_file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-                if st.session_state.get("last_uploaded_id") != current_file_id:
-                    tmp_dir = Path(tempfile.mkdtemp(prefix=f"wiut_{st.session_state['session_id']}_"))
-                    upload_dest = (tmp_dir / Path(uploaded_file.name).name).resolve()
-                    # New upload: drop every cached result tied to the previous file,
-                    # otherwise the old video's telemetry would render for the new one.
-                    for _k in _DEMO_CACHE_KEYS:
-                        st.session_state.pop(_k, None)
-                    with open(upload_dest, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    st.session_state["last_uploaded_id"] = current_file_id
-                    st.session_state["uploaded_video_path"] = str(upload_dest)
-                    st.session_state["uploaded_display_name"] = uploaded_file.name
-                    st.rerun()
+        spec = importlib.util.spec_from_file_location("weights_download", Path("weights/download.py"))
+        wdl = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wdl)
+        need = wdl.missing(["yolo11s.pt"])
+        if need:
+            with st.spinner("First run on this server: downloading the demo detector weights (19 MB) ..."):
+                wdl.download(need, log=lambda m: None)
+        bar = st.progress(0.0)
+        status = st.empty()
 
-        # Extract Telemetry Metadata
-        meta = get_video_metadata(target_video_path) if target_video_path and Path(target_video_path).exists() else None
-        res_val = meta.get('resolution', 'Offline') if meta else 'Offline'
-        fps_val = f"{meta.get('fps', '0')} FPS" if meta else '0 FPS'
-        dur_val = f"{meta.get('duration_sec', '0')}s" if meta else '0s'
-        frames_sub = f"{meta.get('total_frames', '0')} frames" if meta else 'Feed idle'
-        size_val = f"{meta.get('size_mb', '0')} MB" if meta else '0 MB'
-
-        # 4-Chip Telemetry HUD
-        st.markdown(
-            f"""
-            <div class="hud-grid">
-                <div class="hud-chip">
-                    <div class="hud-label">FRAME RESOLUTION</div>
-                    <div class="hud-val">{res_val}</div>
-                    <div class="hud-sub">Native 4K / UHD</div>
-                </div>
-                <div class="hud-chip">
-                    <div class="hud-label">ACQUISITION RATE</div>
-                    <div class="hud-val">{fps_val}</div>
-                    <div class="hud-sub">Temporal Density</div>
-                </div>
-                <div class="hud-chip">
-                    <div class="hud-label">STREAM DURATION</div>
-                    <div class="hud-val">{dur_val}</div>
-                    <div class="hud-sub">{frames_sub}</div>
-                </div>
-                <div class="hud-chip">
-                    <div class="hud-label">PAYLOAD SIZE</div>
-                    <div class="hud-val">{size_val}</div>
-                    <div class="hud-sub">H.264 Container</div>
-                </div>
-            </div>
-            <div class="hud-status-strip">
-                <span class="hud-dot"></span>
-                <span>CALIBRATION: <b>Tashkent Sebzor-Ganga (21 Vector Zones Loaded)</b></span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # Enforce the publicly stated demo limit (~2 minutes per the rubric).
-        # Applies to visitor uploads; the official sample feeds stay runnable.
-        duration_sec_val = float(meta.get("duration_sec", 0) or 0) if meta else 0.0
-        is_upload_mode = st.session_state["live_input_mode"] != "benchmark"
-        duration_ok = (not is_upload_mode) or (duration_sec_val <= DEMO_MAX_DURATION_SEC)
-
-        # Primary Execution Trigger
-        if target_video_path is not None and Path(target_video_path).exists():
-            if duration_ok:
-                run_btn = st.button("EXECUTE AI PIPELINE (PARTS A & B)", type="primary", use_container_width=True, key="exec_pipeline_btn")
-            else:
-                st.button("EXECUTE AI PIPELINE (PARTS A & B)", type="primary", use_container_width=True, disabled=True, key="exec_pipeline_btn_toolong")
-                st.error(
-                    f"Clip is {duration_sec_val / 60:.1f} min — the live demo accepts up to "
-                    f"{DEMO_MAX_DURATION_SEC / 60:.0f} minutes. Trim the video and re-upload. "
-                    f"(Full-length analysis runs offline via `run_submission.py`.)"
-                )
-                run_btn = False
-        else:
-            st.button("EXECUTE AI PIPELINE (PARTS A & B)", type="primary", use_container_width=True, disabled=True, key="exec_pipeline_btn_disabled")
-            st.caption("Select or upload an active surveillance stream above to initiate pipeline.")
-            run_btn = False
-
-    # Pipeline Processing Handler
-    if run_btn:
-        target_resolved = Path(target_video_path).resolve()
-        if not target_resolved.exists():
-            st.error(f"Target video file not found: `{target_video_path}`")
-            st.stop()
-
-        progress_bar = st.progress(0.0)
-        status_text = st.empty()
-        start_time = time.time()
-
-        def update_progress(current, total):
-            pct = int((current / total * 100)) if total > 0 else 0
-            progress_bar.progress(min((current / total) * 0.70, 0.70) if total > 0 else 0.0)
-            elapsed = time.time() - start_time
-            fps = (current / elapsed) if elapsed > 0 else 0.0
-            eta = ((total - current) / fps) if fps > 0 else 0.0
-            status_text.markdown(f"Processing Frame {current} / {total} ({pct}%) | Elapsed Time: {elapsed:.1f}s | Speed: {fps:.1f} FPS | ETA: {eta:.1f}s ...")
+        def on_progress(frac: float, msg: str) -> None:
+            bar.progress(min(1.0, max(0.0, frac)))
+            status.markdown(f"`{msg}`")
 
         try:
-            # Part A: Event Detection (Full Video Stream)
-            events = detect_events(str(target_resolved), progress_callback=update_progress)
-        except Exception as e:
-            st.error(f"Error during Part A Event Detection: {e}")
+            result = run_demo(target_path, session_dir / "clips", uuid.uuid4().hex[:8], progress=on_progress)
+        except Exception as exc:  # show the error instead of a blank page
+            st.error(f"The pipeline failed on this file: {exc}")
             st.stop()
+        status.success(f"Done in {result.elapsed:.0f} s ({result.elapsed / max(1e-9, result.duration):.1f}x the clip length).")
+        st.session_state["demo_result"] = (video_key, result, target_path, display_name)
 
-        # Part B: RiskEstimator Extraction with real-time callback and elapsed timer
-        status_text.markdown("Initializing Causal Risk Estimator (Part B)...")
-        start_time_b = time.time()
-
-        cap = cv2.VideoCapture(str(target_resolved))
-        if not cap.isOpened():
-            st.error(f"Failed to open video file for Risk Estimator: `{target_video_path}`")
-            st.stop()
-
-        risk_scores = []
-        timestamps = []
-        try:
-            fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 100)
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
-
-            estimator = RiskEstimator()
-            estimator.reset(meta={
-                "video_id": display_name,
-                "fps": fps,
-                "n_frames": total_frames,
-                "width": width,
-                "height": height,
-            })
-
-            frame_idx = 0
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret or frame is None:
-                    break
-                t_sec = frame_idx / fps
-
-                # step() on every frame, exactly like run_submission.py (the
-                # estimator skips frames internally); plot every 5th value.
-                score = estimator.step(frame, t_sec)
-                if frame_idx % 5 == 0:
-                    risk_scores.append(round(score, 4))
-                    timestamps.append(round(t_sec, 2))
-
-                    if total_frames > 0 and frame_idx % 15 == 0:
-                        pct_b = int((frame_idx / total_frames * 100))
-                        overall_pct = 0.70 + (min(frame_idx / total_frames, 1.0) * 0.30)
-                        progress_bar.progress(min(overall_pct, 1.0))
-                        elapsed_b = time.time() - start_time_b
-                        fps_b = (frame_idx / elapsed_b) if elapsed_b > 0 else 0.0
-                        status_text.markdown(f"Processing Frame {frame_idx} / {total_frames} ({pct_b}%) | Elapsed: {elapsed_b:.1f}s | Speed: {fps_b:.1f} FPS ... (Risk Estimator)")
-                frame_idx += 1
-        except Exception as e:
-            # Degrade gracefully: keep the Part A results, just no risk curve.
-            st.warning(f"Part B risk estimation failed ({e}); showing Part A results only.")
-        finally:
-            cap.release()
-
-        total_elapsed = time.time() - start_time
-
-        # Annotated event clips (rubric: "annotated playback or clips")
-        clip_paths: list[str] = []
-        if events:
-            clip_windows: list[list[float]] = []
-            for s, e, _lbl in sorted(events, key=lambda x: x[0]):
-                cs = max(0.0, s - 2.0)
-                ce = e + 2.0 if duration_sec_val <= 0 else min(e + 2.0, duration_sec_val)
-                if clip_windows and cs - clip_windows[-1][1] < 1.5:
-                    clip_windows[-1][1] = max(clip_windows[-1][1], ce)
-                else:
-                    clip_windows.append([cs, ce])
-            clip_windows = clip_windows[:DEMO_MAX_CLIPS]
-
-            clip_dir = Path("demo_clips")
-            clip_dir.mkdir(exist_ok=True)
-            import hashlib
-            for ci, (cs, ce) in enumerate(clip_windows):
-                ce = min(ce, cs + 15.0)
-                status_text.markdown(f"Rendering annotated clip {ci + 1}/{len(clip_windows)} ({cs:.1f}s - {ce:.1f}s) ...")
-                clip_id = hashlib.md5(f"{video_key}|{round(cs, 1)}".encode()).hexdigest()[:8]
-                clip_path = clip_dir / f"clip_{ci}_{clip_id}.mp4"
-                try:
-                    render_annotated(
-                        str(target_resolved), str(clip_path),
-                        events=events, width=960, stride=1,
-                        start_sec=cs, end_sec=ce,
-                    )
-                    clip_paths.append(str(clip_path))
-                except Exception as clip_err:
-                    st.warning(f"Annotated clip rendering skipped ({clip_err}).")
-                    break
-
-        progress_bar.progress(1.0)
-        status_text.success(
-            f"Inference Complete. Total Elapsed Time: {total_elapsed:.1f}s"
-            + (f" — {len(clip_paths)} annotated event clips rendered." if clip_paths else "")
-        )
-
-        # Cache results in session state (keyed by content identity, not path)
-        st.session_state["cached_video"] = target_video_path
-        st.session_state["cached_video_key"] = video_key
-        st.session_state["cached_display_name"] = display_name
-        st.session_state["cached_events"] = events
-        st.session_state["cached_risk"] = risk_scores
-        st.session_state["cached_timestamps"] = timestamps
-        st.session_state["cached_elapsed"] = total_elapsed
-        st.session_state["cached_duration"] = duration_sec_val
-        st.session_state["cached_clips"] = clip_paths
-
-    # ------------------------------------------------------------------------
-    # STEP 03: Telemetry Results & Risk Analytics Deck
-    # ------------------------------------------------------------------------
-    if "cached_events" in st.session_state and st.session_state.get("cached_video_key") == video_key:
-        events = st.session_state["cached_events"]
-        risk_scores = st.session_state["cached_risk"]
-        timestamps = st.session_state["cached_timestamps"]
-        total_elapsed = st.session_state.get("cached_elapsed", 0.0)
-        cached_name = st.session_state.get("cached_display_name", display_name)
-
+    cached = st.session_state.get("demo_result")
+    if cached and cached[0] == video_key:
+        _, result, res_path, res_name = cached
+        events = result.events
+        risk = result.risk
         st.markdown(
             """
-            <div class="section-header-block" style="margin-top: 36px;">
-                <div class="section-eyebrow">STEP 03 // TELEMETRY RESULTS & RISK AUDIT</div>
-                <h2 class="section-heading-h2">Inference Output & Post-Mortem Diagnostics</h2>
+            <div class="section-header-block" style="margin-top: 28px;">
+                <div class="section-eyebrow">RESULTS</div>
+                <h2 class="section-heading-h2">Detected events and risk</h2>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        # 4 KPI metric cards across the top
+        reg = (result.info or {}).get("registration") or {}
+        if reg.get("status") != "ok":
+            st.warning("This video could not be registered to the competition camera view, so the zones may not fit "
+                       "and the rules can be wrong. The demo is meant for footage from this junction camera.")
         k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-value">{len(events)}</div>'
-                f'<div class="metric-label">Total Violations Found</div>'
-                f'<div class="metric-sub">Clean merged segments</div></div>',
-                unsafe_allow_html=True,
-            )
-        with k2:
-            max_r = max(risk_scores) if risk_scores else 0.0
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-value">{max_r:.2f}</div>'
-                f'<div class="metric-label">Max Hazard Risk P(t)</div>'
-                f'<div class="metric-sub">Peak causal score</div></div>',
-                unsafe_allow_html=True,
-            )
-        with k3:
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-value">{total_elapsed:.1f}s</div>'
-                f'<div class="metric-label">Total Runtime</div>'
-                f'<div class="metric-sub">GPU inference speed</div></div>',
-                unsafe_allow_html=True,
-            )
-        with k4:
-            cached_dur = float(st.session_state.get("cached_duration", 0.0) or 0.0)
-            budget_used_pct = (
-                int(round(100.0 * total_elapsed / (3.0 * cached_dur))) if cached_dur > 0 else 0
-            )
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-value">{budget_used_pct}%</div>'
-                f'<div class="metric-label">Budget Utilization</div>'
-                f'<div class="metric-sub">of the 3.0x wall-clock limit</div></div>',
-                unsafe_allow_html=True,
-            )
-
-        # Split 2-Column Deck: Part A on Left, Part B on Right
-        res_col1, res_col2 = st.columns([1.12, 0.88], gap="large")
-
-        with res_col1:
-            st.markdown(
-                """
-                <div class="section-header-block">
-                    <div class="section-eyebrow">PART A // DETECTIONS</div>
-                    <h2 class="section-heading-h2">Detected Traffic Violations</h2>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if events:
-                render_event_timeline(events, float(st.session_state.get("cached_duration", 0.0) or 0.0))
-                df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Violation Label"])
-                df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(3)
-
-                avail_labels = sorted(df["Violation Label"].unique())
-                filter_labels = st.multiselect("Filter Violation Classes:", avail_labels, default=avail_labels, key="live_filter")
-                filtered_df = df[df["Violation Label"].isin(filter_labels)]
-
-                st.dataframe(filtered_df, use_container_width=True, height=280)
-
-                export_payload = json.dumps({"events": events, "risk": list(zip(timestamps, risk_scores))}, indent=2)
-                st.download_button(
-                    label="Export Predictions JSON (Official Hackathon Format)",
-                    data=export_payload,
-                    file_name=f"predictions_{Path(cached_name).stem}.json",
-                    mime="application/json",
-                    use_container_width=True,
+        max_r = max((r for _, r in risk), default=0.0)
+        for col, value, label, sub in (
+            (k1, f"{len(events)}", "Events", ", ".join(sorted({e[2] for e in events})) or "none"),
+            (k2, f"{max_r:.2f}", "Peak risk", "alarm threshold 0.50"),
+            (k3, f"{result.elapsed:.0f} s", "Processing time", f"{result.elapsed / max(1e-9, result.duration):.1f}x the clip"),
+            (k4, f"{reg.get('dx_4k', 0):+.0f}/{reg.get('dy_4k', 0):+.0f}px", "Camera drift", f"rot {reg.get('rot_deg', 0):+.2f} deg"),
+        ):
+            with col:
+                st.markdown(
+                    f'<div class="metric-card"><div class="metric-value">{value}</div>'
+                    f'<div class="metric-label">{label}</div><div class="metric-sub">{html.escape(sub)}</div></div>',
+                    unsafe_allow_html=True,
                 )
+
+        left, right = st.columns([1.1, 0.9], gap="large")
+        with right:
+            st.markdown("#### Event timeline")
+            if events:
+                render_event_timeline(events, result.duration)
+                opts = ["(from the start)"] + [f"{e[2]}  {e[0]:.1f}-{e[1]:.1f} s" for e in events]
+                pick = st.selectbox("Jump the video to an event:", opts, key="demo_jump")
+                start_at = 0 if pick == opts[0] else max(0, int(events[opts.index(pick) - 1][0]) - 1)
+                df = pd.DataFrame(events, columns=["Start (s)", "End (s)", "Class"])
+                df["Duration (s)"] = (df["End (s)"] - df["Start (s)"]).round(2)
+                st.dataframe(df, width="stretch", height=220, hide_index=True)
             else:
-                st.info("No traffic violations or incidents detected in this stream.")
+                start_at = 0
+                st.info("No events detected in this clip.")
+            payload = {"videos": {res_name: {"events": events, "risk": [[t, r] for t, r in risk]}}}
+            st.download_button("Download the result (predictions.json format)", json.dumps(payload, indent=1),
+                               file_name=f"predictions_{Path(res_name).stem}.json", mime="application/json",
+                               width="stretch")
+        with left:
+            st.markdown("#### Your video")
+            if Path(res_path).exists() and Path(res_path).stat().st_size <= 150 * 1024 * 1024:
+                st.video(res_path, start_time=start_at)
+            st.markdown("#### Risk curve (Part B)")
+            if risk:
+                rdf = pd.DataFrame({"Risk P(accident within 5 s)": [r for _, r in risk], "Alarm threshold 0.5": [0.5] * len(risk)},
+                                   index=pd.Index([t for t, _ in risk], name="t (s)"))
+                st.line_chart(rdf, color=["#00f2fe", "#ef4444"], height=240)
 
-        with res_col2:
-            st.markdown(
-                """
-                <div class="section-header-block">
-                    <div class="section-eyebrow">PART B // CAUSAL RISK</div>
-                    <h2 class="section-heading-h2">Accident Risk Curve P(t)</h2>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if risk_scores:
-                df_risk = pd.DataFrame({
-                    "Accident Risk P(t)": risk_scores,
-                    "Alarm Threshold (0.50)": [0.50] * len(risk_scores),
-                }, index=timestamps if timestamps and len(timestamps) == len(risk_scores) else None)
-
-                st.line_chart(df_risk, color=["#00f2fe", "#ef4444"], height=280)
-                st.caption("Temporal accident risk score P(t) with official 0.50 alarm threshold line (red). Evaluated causally without future frame leakage.")
-
-        # Annotated event clips (rubric: timeline + annotated playback/clips)
-        cached_clips = st.session_state.get("cached_clips") or []
-        if cached_clips:
-            st.markdown(
-                """
-                <div class="section-header-block" style="margin-top: 28px;">
-                    <div class="section-eyebrow">ANNOTATED PLAYBACK</div>
-                    <h2 class="section-heading-h2">AI-Annotated Event Clips</h2>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            clip_cols = st.columns(min(3, len(cached_clips)))
-            for ci, clip_path in enumerate(cached_clips):
-                if Path(clip_path).exists():
-                    with clip_cols[ci % len(clip_cols)]:
-                        with open(clip_path, "rb") as fh:
-                            st.video(fh.read())
-                        st.caption(f"Clip {ci + 1} — 21-zone overlay, tracked boxes, TL state, event banner.")
+        if result.clips:
+            st.markdown("#### Annotated event clips")
+            ccols = st.columns(min(3, len(result.clips)))
+            for i, (clip, caption) in enumerate(result.clips):
+                if Path(clip).exists():
+                    with ccols[i % len(ccols)]:
+                        st.video(clip)
+                        st.caption(caption)
 
 
 # ============================================================================
@@ -2482,95 +2103,43 @@ elif selected_section == "Report":
 elif selected_section == "Links":
     render_page_header(
         module_num="07",
-        eyebrow_suffix="SUBMISSION ARTIFACTS",
+        eyebrow_suffix="LINKS",
         title="Repository, Weights & Predictions",
-        subtitle="Official verified submission links conforming strictly to Hackathon rubric Section 7.",
-        badge_text="VERIFIED LINKS",
-        mini_spec="SEED 42 LOCKED",
+        subtitle="Everything needed to reproduce the submission.",
+        badge_text="PUBLIC",
+        mini_spec="seed 42",
     )
 
+    WEIGHT_LINKS = [
+        ("yolo11l.pt", "Part A detector", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11l.pt", "AGPL-3.0"),
+        ("yolov8n.pt", "Part B detector", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt", "AGPL-3.0"),
+        ("accident_model.pt", "crash / fire / smoke model (epoch90.pt, renamed)",
+         "https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights", "MIT"),
+        ("yolo11s.pt", "website demo detector only", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt", "AGPL-3.0"),
+    ]
     c1, c2, c3 = st.columns(3)
+    card = ('<div class="team-badge-card" style="text-align:left;padding:20px;">'
+            '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:1.15rem;font-weight:700;color:#f8fafc;margin-bottom:8px;">{title}</div>'
+            '<div style="color:#94a3b8;font-size:0.86rem;line-height:1.7;margin-bottom:14px;">{body}</div></div>')
     with c1:
-        st.markdown(
-            """
-            <div class="team-badge-card" style="text-align: left; padding: 20px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Public Git Repository</div>
-                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
-                    • <b>Remote URL</b>: <a href="https://github.com/DeWeWO/wiut" target="_blank" style="color: #38bdf8;">github.com/DeWeWO/wiut</a><br>
-                    • <b>Branch</b>: <code>master</code><br>
-                    • <b>Reproducibility</b>: Deterministic seed locked (<code>seed=42</code>). Clean submission package.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
-        st.link_button("Open GitHub Repository", "https://github.com/DeWeWO/wiut", use_container_width=True)
-
+        st.markdown(card.format(title="Repository", body=(
+            f'• <a href="{REPO_URL}" target="_blank" style="color:#38bdf8;">{REPO_URL.replace("https://", "")}</a><br>'
+            "• Run: <code>pip install -r requirements.txt</code>, <code>bash weights/download.sh</code>, "
+            "<code>python run_submission.py --videos /data/test --out predictions.json</code><br>"
+            "• Harness and metric unchanged; seed 42; see README for approach, datasets and licences")), unsafe_allow_html=True)
+        st.link_button("Open the repository", REPO_URL, width="stretch")
     with c2:
-        st.markdown(
-            """
-            <div class="team-badge-card" style="text-align: left; padding: 20px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Model Weights</div>
-                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
-                    • <b>Primary</b>: <code>weights/yolo11l.pt</code> (Ultralytics release)<br>
-                    • <b>Anomaly</b>: <code>weights/accident_model.pt</code> — <a href="https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights" target="_blank" style="color: #38bdf8;">Hugging Face</a> (<code>weights/epoch90.pt</code>, renamed; MIT)<br>
-                    • <b>Estimator</b>: <code>weights/yolov8n.pt</code> (Ultralytics release)<br>
-                    • <b>Fetcher</b>: <code>bash weights/download.sh</code> (one command, ~190 MB total)
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
+        body = "".join(f'• <a href="{u}" target="_blank" style="color:#38bdf8;"><code>{n}</code></a> - {d} ({lic})<br>'
+                       for n, d, u, lic in WEIGHT_LINKS)
+        body += "• One command: <code>bash weights/download.sh</code> (checksums in <code>weights/SHA256SUMS</code>)"
+        st.markdown(card.format(title="Model weights", body=body), unsafe_allow_html=True)
     with c3:
-        st.markdown(
-            """
-            <div class="team-badge-card" style="text-align: left; padding: 20px;">
-                <div style="font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">Benchmark Predictions</div>
-                <div style="color: #94a3b8; font-size: 0.86rem; line-height: 1.6; margin-bottom: 14px;">
-                    • <b>File</b>: <code>predictions_samples.json</code><br>
-                    • <b>Harness</b>: <code>python evaluate.py --validate-only</code><br>
-                    • <b>Score</b>: <code>0 errors, 0 warnings, 0 blips</code>.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+        st.markdown(card.format(title="predictions_samples.json", body=(
+            "• Our output on the four sample videos, produced by the unchanged harness<br>"
+            "• <code>python evaluate.py --pred predictions_samples.json --validate-only</code>: VALID, 0 errors, 0 warnings<br>"
+            f'• Website: <a href="{SPACE_URL}" target="_blank" style="color:#38bdf8;">{SPACE_URL.replace("https://", "")}</a>')),
+            unsafe_allow_html=True)
         pred_p = Path("predictions_samples.json")
         if pred_p.exists():
-            with open(pred_p, "rb") as f:
-                st.download_button(
-                    label="Download predictions_samples.json",
-                    data=f.read(),
-                    file_name="predictions_samples.json",
-                    mime="application/json",
-                    use_container_width=True,
-                )
-
-    st.markdown(
-        """
-        <div class="section-header-block">
-            <div class="section-eyebrow">EVALUATION ARTIFACTS</div>
-            <h2 class="section-heading-h2">predictions_samples.json Telemetry Summary</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    pred_p = Path("predictions_samples.json")
-    if pred_p.exists():
-        with open(pred_p, "r") as f:
-            p_data = json.load(f)
-        summary_rows = []
-        for vid, v_info in p_data.get("videos", {}).items():
-            evs = v_info.get("events", [])
-            risks = v_info.get("risk", [])
-            summary_rows.append({
-                "Video Feed": vid,
-                "Total Events (>=0.5s)": len(evs),
-                "Risk Timeline Samples": len(risks),
-                "Micro-blips (<0.5s)": sum(1 for e in evs if (e[1] - e[0]) < 0.5),
-                "Harness Status": "VALID (0 errors)",
-            })
-        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True)
+            st.download_button("Download predictions_samples.json", pred_p.read_bytes(), file_name="predictions_samples.json",
+                               mime="application/json", width="stretch")

@@ -1,0 +1,40 @@
+{
+  "_note": "Edit freely: the website renders whatever is here. 'projects' are previous work the member is proud of (name, url, one-line description). Links are optional.",
+  "members": [
+    {
+      "name": "Ollabergan",
+      "photo": "assets/team/ollabergan.jpg",
+      "role": "Computer vision & system architecture",
+      "did": "Scene layout and per-video registration, tracking and event rules, the website.",
+      "skills": ["PyTorch", "YOLO11", "OpenCV", "ByteTrack", "Streamlit"],
+      "links": {"GitHub": "https://github.com/DeWeWO", "LinkedIn": "https://www.linkedin.com/in/dewew/"},
+      "projects": [
+        {"name": "FizikaT-bot", "url": "https://github.com/DeWeWO/FizikaT-bot", "desc": "Python Telegram bot"},
+        {"name": "BlogAPI", "url": "https://github.com/DeWeWO/BlogAPI", "desc": "Python backend API for a blog"},
+        {"name": "bot_Register", "url": "https://github.com/DeWeWO/bot_Register", "desc": "Dockerised bot that registers users in a backend"}
+      ]
+    },
+    {
+      "name": "Seymonbek Ikramov",
+      "photo": "assets/team/seymonbek.jpg",
+      "role": "Anomaly model & Part B risk",
+      "did": "Integrated and gated the open-weights crash/fire model; built the causal Part B risk estimator (time-to-collision on collision courses).",
+      "skills": ["PyTorch", "YOLOv8", "NumPy", "Risk modelling"],
+      "links": {"GitHub": "https://github.com/Seymonbek", "LinkedIn": "https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/"},
+      "projects": [
+        {"name": "Denta_CRM", "url": "https://github.com/Seymonbek/Denta_CRM", "desc": "Python CRM for a dental clinic"},
+        {"name": "SkillSwap_AI", "url": "https://github.com/Seymonbek/SkillSwap_AI", "desc": "Python backend (with a separate JavaScript frontend)"},
+        {"name": "News_Site", "url": "https://github.com/Seymonbek/News_Site", "desc": "News site created with Django"}
+      ]
+    },
+    {
+      "name": "Soliyev Siroj",
+      "photo": "assets/team/siroj.jpg",
+      "role": "EDA & evaluation",
+      "did": "Sample-video EDA and metadata extraction, the scene description notes the zones were drawn from, evaluation runs of the submission harness.",
+      "skills": ["EDA", "Pandas", "FFmpeg", "Visualisation"],
+      "links": {},
+      "projects": []
+    }
+  ]
+}

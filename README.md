@@ -1,17 +1,6 @@
----
-title: Traffic AI
-emoji: 🚦
-colorFrom: blue
-colorTo: indigo
-sdk: streamlit
-sdk_version: 1.32.0
-app_file: app.py
-pinned: false
----
-
 # Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
-**Team: dewew**
+**Team: dewew** · Website: https://huggingface.co/spaces/dewewo/TrafficAI-Web · Repository: https://github.com/DeWeWO/wiut
 
 The system watches a road-junction CCTV camera and does two things:
 
@@ -31,12 +20,13 @@ python run_submission.py --videos /data/test --out predictions.json
 python evaluate.py --pred predictions.json --validate-only
 ```
 
-`weights/download.sh` fetches three files (≈190 MB total) and verifies them against `weights/SHA256SUMS`:
+`weights/download.sh` fetches the weights (≈210 MB total) and verifies them against `weights/SHA256SUMS`:
 
 | file | what | source | licence |
 |---|---|---|---|
 | `yolo11l.pt` | road-user detector (Part A) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
 | `yolov8n.pt` | light detector (Part B) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
+| `yolo11s.pt` | website CPU demo only (not used by the submission) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
 | `accident_model.pt` | YOLOv8x crash-severity / fire / smoke detector (classes: detected-injury, fire, high / medium / low severity, smoke) | [Enos-123/accident-evaluator-yolov8x](https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights): the file `weights/epoch90.pt`, downloaded as-is and renamed to `accident_model.pt` (checksum in `weights/SHA256SUMS`) | MIT (as declared on the model card) |
 
 ### Datasets
@@ -45,7 +35,7 @@ We trained nothing ourselves. The datasets below are the ones behind the pretrai
 
 | dataset | used through | licence |
 |---|---|---|
-| COCO 2017 | `yolo11l.pt`, `yolov8n.pt` (Ultralytics pretrained) | CC BY 4.0 (annotations) |
+| COCO 2017 | `yolo11l.pt`, `yolov8n.pt`, `yolo11s.pt` (Ultralytics pretrained) | CC BY 4.0 (annotations) |
 | Roboflow "Accident Evaluator" | `accident_model.pt` (named as its training set on the model card) | not stated on the model card; the card links no dataset page |
 
 No other data was used. The scene layout was drawn by hand on a frame of the provided sample videos.
@@ -55,7 +45,17 @@ After the download, nothing else is fetched: the code loads weights only from
 
 A `Dockerfile` (CUDA 12.4, Python 3.11) is also provided. Its header shows the build/run commands.
 
-The website runs with `pip install -r requirements-web.txt && streamlit run app.py`.
+`requirements.txt` is the submission environment (pinned, CUDA build of torch on Linux). The website has
+separate dependencies:
+
+- **Locally:** `pip install -r requirements-web.txt && streamlit run app.py`.
+- **Hugging Face Space:** `python scripts/build_space.py` writes `dist/space/`. That folder holds the site files, with
+  `space/README.md` (the Space header) and the CPU `space/requirements.txt` as its root files. The Space is deployed from it, so
+  the Space's settings never change the submission's requirements.
+
+The live demo runs the same pipeline in a CPU setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model, and the risk
+curve from the same causal tracks (`src/demo.py`). It accepts clips up to 2 minutes / 300 MB. On 2 vCPUs, a 35 s 720p clip
+takes about 35 s and 4K takes about 2× the clip length.
 
 ---
 
@@ -154,19 +154,24 @@ src/
   events.py                 Part A pipeline (+ replay from cached perception)
   risk.py                   Part B estimator
   config.py                 thresholds, enabled classes, seed
-  annotate.py               annotated-video renderer (website previews / demo clips)
+  annotate.py               annotated-video renderer (website previews)
+  demo.py                   website live demo (CPU setting, clips drawn from stored tracks)
   deep_eda.py, eda_extractor.py   EDA artefacts for the website
   devset/                   labelling helpers (CSV -> ground truth, review clips, report)
-scripts/                    replay_rules.py, signal_timeline.py, eval_dev.sh, smoke.sh, make_clip.py
+scripts/                    replay_rules.py, signal_timeline.py, make_examples.py, build_space.py, eval_dev.sh, smoke.sh, make_clip.py
 tests/                      unit tests + end-to-end smoke test through run_submission.py
 docs/                       scene.md, class_policy.md
 assets/scene_ref.jpg        reference frame for registration
+assets/examples/            one or two frames per detected class (website Results)
+assets/team/team.json       team page content (roles, contributions, links, previous projects)
+samples/previews/           annotated sample videos; samples/demo/ a 35 s 720p clip for the demo
+space/                      Hugging Face Space header + CPU requirements (see build_space.py)
 weights/                    download.sh / download.py / SHA256SUMS
 app.py                      team website (Streamlit)
 ```
 
 Development: `pip install -r requirements-dev.txt`, then `bash scripts/smoke.sh`, which runs
-`pytest` (unit tests plus an 8 s clip through the official harness) and a website import check.
+`pytest`: unit tests, an 8 s clip through the official harness, every website page, and a click-through of the live demo on the bundled clip.
 
 ---
 
