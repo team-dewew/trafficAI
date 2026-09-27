@@ -15,10 +15,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.annotate import draw_scene
-from src.demo import DEMO_MAX_MB, DEMO_MAX_SEC, run_demo
-from src.registration import estimate_scene_transform
-from src.scene import build_scene
+from src.annotate import draw_scene  # type: ignore
+from src.demo import DEMO_MAX_MB, DEMO_MAX_SEC, run_demo  # type: ignore
+from src.registration import estimate_scene_transform  # type: ignore
+from src.scene import build_scene  # type: ignore
 
 REPO_URL = "https://github.com/DeWeWO/wiut"
 SITE_URL = "https://trafficai.dewew.dev"
@@ -593,7 +593,7 @@ st.markdown(
     }
     
     [data-testid="stSidebarContent"], [data-testid="stSidebarUserContent"] {
-        padding: 50px 20px 24px 20px !important;
+        padding: 8px 2px 0px 2px !important;
     }
 
     section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
@@ -889,7 +889,7 @@ def show_image(img, caption: str | None = None) -> None:
     try:
         st.image(img, caption=caption, width="stretch")
     except TypeError:                   # Streamlit < 1.46
-        st.image(img, caption=caption, use_column_width=True)
+        st.image(img, caption=caption, use_container_width=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -1310,7 +1310,7 @@ elif selected_section == "Problem and Approach":
         policy = Path("docs/class_policy.md")
         if policy.exists():
             st.markdown(policy.read_text(encoding="utf-8").split(chr(10), 1)[1])
-        from src.config import RULES
+        from src.config import RULES  # type: ignore
         with st.expander("All thresholds (src/config.py)"):
             st.json(RULES)
 
