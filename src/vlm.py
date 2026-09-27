@@ -33,7 +33,7 @@ def available() -> bool:
     return (VLM_DIR / "model.safetensors").exists() and (VLM_DIR / "modeling_internvl_chat.py").exists()
 
 
-def square_crop(frame: np.ndarray, box, scale: float = 2.5, min_side: int = 448) -> np.ndarray:
+def square_crop(frame: np.ndarray, box, scale: float = 1.6, min_side: int = 256) -> np.ndarray:
     """Square region around `box` (x1, y1, x2, y2), `scale` times its larger side, clipped to the frame."""
     h, w = frame.shape[:2]
     if box is None:
@@ -145,7 +145,8 @@ class FrameWindowVerifier:
         self.buffer_width = buffer_width
         self.frames: deque = deque()                 # (t, frame, scale from video px to buffer px)
         self.max_calls = max_calls
-        self.max_sec = max_frac * max(duration, 1.0)
+        # a short clip still gets a few seconds (4 crash windows + some smoke checks), well inside its 3x budget
+        self.max_sec = max(max_frac * duration, min(6.0, 0.5 * duration))
         self.calls = 0
         self.seconds = 0.0
 

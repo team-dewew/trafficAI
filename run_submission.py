@@ -27,9 +27,6 @@ import argparse
 import importlib.util
 import json
 import sys
-import sys
-if sys.version_info >= (3, 13) or sys.version_info < (3, 11):
-    sys.exit("?? ERROR: Python 3.11 or 3.12 is REQUIRED. Python 3.13+ is not supported due to missing dependencies.")
 import time
 import traceback
 from pathlib import Path
@@ -215,4 +212,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

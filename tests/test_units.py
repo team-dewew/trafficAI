@@ -167,13 +167,13 @@ def _crash_run(stub, drive_on=False):
 def test_collision_candidate_is_verified_and_reported():
     stub = _StubVerifier(0.95)
     events = _crash_run(stub)
-    assert len(stub.calls) == 1 and stub.calls[0][0] == "accident"
+    assert [c[0] for c in stub.calls].count("accident") == 4          # four verifier windows; later calls: smoke checks
     assert len(events) == 1 and 1.0 <= events[0][0] <= 1.6
 
 
 def test_rejected_candidate_gives_no_accident():
     stub = _StubVerifier(0.1)
-    assert not _crash_run(stub) and len(stub.calls) == 1
+    assert not _crash_run(stub) and [c[0] for c in stub.calls] == ["accident"]   # no smoke watch without a crash
 
 
 def test_vehicles_that_drive_on_are_not_asked_about():
@@ -190,3 +190,52 @@ def test_weak_fire_hit_is_verified():
         eng.update(obs)
     events = [e for e in eng.finalize(10.0) if e[2] == "fire_smoke"]
     assert stub.calls and stub.calls[0][0] == "fire_smoke" and len(events) == 1
+
+
+class _SmokeAfter:
+    """Accepts the crash; reports smoke only from `t_smoke` on."""
+
+    def __init__(self, t_smoke):
+        self.t_smoke, self.fire_calls = t_smoke, 0
+
+    def __call__(self, kind, t_from, t_to, box, n_frames):
+        if kind == "accident":
+            return 0.95
+        self.fire_calls += 1
+        return 0.9 if t_from >= self.t_smoke else 0.05
+
+
+def test_smoke_after_a_crash_is_found_by_the_site_watch():
+    stub = _SmokeAfter(t_smoke=4.5)
+    eng = RuleEngine(build_scene(IDENTITY), SignalState(), verifier=stub)
+    for t in np.arange(0, 10.0, 0.1):
+        x = min(500 + 300 * t, 900)
+        eng.update(_obs(t, [(1, (x, 560, x + 200, 680), "car"), (2, (1000, 560, 1200, 680), "car")]))
+    events = eng.finalize(10.0)
+    fire = [e for e in events if e[2] == "fire_smoke"]
+    assert [e for e in events if e[2] == "accident"]
+    assert len(fire) == 1 and 3.5 <= fire[0][0] <= 5.5 and fire[0][1] == 10.0
+    assert stub.fire_calls >= 3
+
+
+def test_head_on_hit_with_barely_touching_boxes_is_a_candidate():
+    """Regression: two cars meeting nose to nose leave side-by-side boxes with ~zero IoU."""
+    stub = _StubVerifier(0.95)
+    eng = RuleEngine(build_scene(IDENTITY), SignalState(), verifier=stub)
+    for t in np.arange(0, 6.0, 0.1):
+        x1 = min(500 + 200 * t, 800)                       # right edge stops at 1000 ...
+        x2 = max(1300 - 200 * t, 1003)                     # ... left edge stops at 1003: 3 px apart
+        eng.update(_obs(t, [(1, (x1, 560, x1 + 200, 680), "car"), (2, (x2, 560, x2 + 200, 680), "car")]))
+    assert [c[0] for c in stub.calls].count("accident") == 4
+    assert [e for e in eng.finalize(6.0) if e[2] == "accident"]
+
+
+def test_accident_needs_a_high_mean_over_the_verifier_windows():
+    answers = iter([0.9, 0.5, 0.5, 0.5])                     # passes the screen, mean 0.6 < accept_p
+    calls = []
+
+    def verifier(kind, t_from, t_to, box, n_frames):
+        calls.append(kind)
+        return next(answers) if kind == "accident" else 0.0
+
+    assert not _crash_run(verifier) and calls.count("accident") == 4

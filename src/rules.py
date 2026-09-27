@@ -92,6 +92,8 @@ class RuleEngine:
         self.acc_active: list[dict] = []
         self.fire_pending: list[dict] = []
         self.fire_seen: list[float] = []
+        self.fire_watch: list[dict] = []             # places of verified accidents, checked for smoke
+        self.last_t = 0.0
         self.vlm_log: list[dict] = []                # every question asked (or skipped), for diagnostics
         up = scene["ltr_upstream"]
         self.up_sign_strict = np.sign(line_side(scene["stop_line_strict"], *up))
@@ -106,6 +108,7 @@ class RuleEngine:
     # ------------------------------------------------------------------ main
     def update(self, obs: Observation) -> None:
         t = obs.t
+        self.last_t = t
         s = self.scene
         tracks = self.store.update(t, obs.tids, obs.boxes, obs.names)
         sig = self.signal.state
@@ -365,7 +368,7 @@ class RuleEngine:
                 if a.cls == "pedestrian" and b.cls == "pedestrian":
                     continue
                 key = (min(a.tid, b.tid), max(a.tid, b.tid))
-                if key in self.acc_pairs or box_iou(a.box, b.box) < cfg["contact_iou"]:
+                if key in self.acc_pairs or not self._touching(a, b, cfg["touch_pad"]):
                     continue
                 big = max(a.diag, b.diag)
                 gap = float(np.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1])) / big
@@ -387,6 +390,13 @@ class RuleEngine:
                 self._propose_accident(t, key, union, "tracks",
                                        {"v_pre": v_pre, "closing": gap_before - gap, "gap": gap})
 
+    @staticmethod
+    def _touching(a: TrackState, b: TrackState, pad: float) -> bool:
+        """Boxes overlap or nearly touch. A head-on hit leaves two boxes side by side with almost no overlap."""
+        pa, pb = pad * a.diag, pad * b.diag
+        return (a.box[0] - pa <= b.box[2] + pb and b.box[0] - pb <= a.box[2] + pa
+                and a.box[1] - pa <= b.box[3] + pb and b.box[1] - pb <= a.box[3] + pa)
+
     def _propose_accident(self, t: float, tids: tuple, box: np.ndarray, source: str,
                           feats: dict | None = None) -> None:
         cfg = RULES["accident"]
@@ -404,15 +414,26 @@ class RuleEngine:
             if c["source"] == "tracks" and (after.get("v_post", 0.0) >= cfg["post_max_speed"]
                                             or after.get("gap_post", 0.0) >= cfg["post_max_gap"]):
                 continue          # they drove on / apart: not a crash
-            p = None
-            if self.verifier is not None:
-                p = self.verifier("accident", c["t0"] - cfg["pre_sec"], c["t0"] + cfg["post_sec"], c["box"],
-                                  cfg["vlm_frames"])
+            # the first window screens; the rest are asked only for a plausible crash, then averaged
+            ps: list[float] = []
+            for pre, post, n in cfg["windows"] if self.verifier is not None else []:
+                q = self.verifier("accident", c["t0"] - pre, c["t0"] + post, c["box"], n)
+                if q is None:
+                    ps = []
+                    break
+                ps.append(q)
+                if q < cfg["screen_p"]:
+                    break
+            p = float(np.mean(ps)) if ps else None
             self.vlm_log.append({"kind": "accident", "t": round(c["t0"], 2), "source": c["source"],
-                                 "p": None if p is None else round(p, 4),
+                                 "p": None if p is None else round(p, 4), "ps": [round(q, 4) for q in ps],
                                  **{k: round(float(v), 3) for k, v in {**c["feats"], **after}.items()}})
-            if p is not None and p >= cfg["accept_p"]:
+            if p is not None and p >= cfg["accept_p"] and len(ps) == len(cfg["windows"]):
                 self.acc_active.append({"start": c["t0"], "tids": c["tids"], "key": ("vlm", c["tids"])})
+                fw = RULES["fire_smoke"]
+                self.fire_watch.append({"box": c["box"], "next": c["t0"] + fw["watch_step"],
+                                        "until": c["t0"] + fw["watch_sec"], "start": None, "last_pos": None, "neg": 0})
+        self._watch_fire(t)
         fcfg = RULES["fire_smoke"]
         for c in list(self.fire_pending):
             self.fire_pending.remove(c)
@@ -423,6 +444,33 @@ class RuleEngine:
                                  "p": None if p is None else round(p, 4)})
             if p is not None and p >= fcfg["accept_p"]:
                 self.raw.append([c["t0"], c["t0"] + fcfg["event_sec"], "fire_smoke", "vlm"])
+
+    def _watch_fire(self, t: float) -> None:
+        """Smoke often starts seconds after a crash: re-check a verified crash site every `watch_step` s.
+        The event runs from the first positive check (minus half a step) until two checks in a row are negative."""
+        fw = RULES["fire_smoke"]
+        step = fw["watch_step"]
+        for w in list(self.fire_watch):
+            while w["next"] <= min(t, w["until"]):
+                tc = w["next"]
+                w["next"] += step
+                p = None if self.verifier is None else self.verifier("fire_smoke", tc, tc, w["box"], 1)
+                self.vlm_log.append({"kind": "fire_smoke", "t": round(tc, 2), "source": "crash_site",
+                                     "p": None if p is None else round(p, 4)})
+                if p is None:
+                    continue
+                if p >= fw["accept_p"]:
+                    if w["start"] is None:
+                        w["start"] = tc - step / 2
+                    w["last_pos"], w["neg"] = tc, 0
+                    w["until"] = max(w["until"], tc + 2 * step)     # keep watching while it burns
+                elif w["start"] is not None:
+                    w["neg"] += 1
+                    if w["neg"] >= 2:
+                        self.raw.append([w["start"], w["last_pos"] + step / 2, "fire_smoke", "vlm_watch"])
+                        w["start"] = None
+            if w["next"] > w["until"] and w["start"] is None:
+                self.fire_watch.remove(w)
 
     def _after(self, c: dict) -> dict:
         """How the candidate's road users behave `post_sec` after contact."""
@@ -530,7 +578,12 @@ class RuleEngine:
         self.fty.clear()
         for key in list(self.nm_active):
             self._close_nm(key, self.nm_active[key]["last"])
-        self._verify_pending(float("inf"))
+        # candidates still waiting for their post-contact frames are asked with what the video has
+        self._verify_pending(self.last_t + RULES["accident"]["post_sec"])
+        for w in self.fire_watch:
+            if w["start"] is not None:
+                self.raw.append([w["start"], duration, "fire_smoke", "vlm_watch"])
+        self.fire_watch.clear()
         for a in self.acc_active:
             self.raw.append([a["start"], min(duration, a["start"] + RULES["accident"]["max_duration"]),
                              "accident", a["key"]])

@@ -96,16 +96,24 @@ Key design points:
 - **The camera pose drifts between recordings.** Relative to the reference frame (C3905), C3902 is shifted by (−91, +28) px, and C3896/C3897 are rotated by ~1° and scaled by 0.986. Each video is registered once at start-up, and the transform is applied to all zones. See `docs/scene.md`.
 - **The signal is read from its lamps.** A lit lamp is ~5 px tall at 4K, so we measure colour in small windows at the calibrated lamp centres. On all four samples this gives a clean cycle of ~37 s red, ~35 s green and 3–6 s amber/transition (`scripts/signal_timeline.py`).
 - **Speeds are scale-free**, measured in body-diagonals per second of the track's ground point. The same threshold then works near and far from the camera, and at any resolution.
-- **Part B** scores time-to-collision only for pairs on a real collision course: closest approach < 0.3 of their size, held for 2 updates. Duplicate boxes are merged, far-field objects and far-carriageway pairs are skipped (image-space geometry is too compressed there), and same-direction pairs count only as fast rear-end closings. On the samples, which contain no crashes, the score is ≥ 0.5 in under 0.5 % of frames. An earlier version was ≥ 0.5 in 36–60 % of frames because of duplicate boxes and perspective convergence.
+- **Part B** scores time-to-collision only for pairs on a real collision course (at least one of them moving at ≥ 0.5 diag/s,
+  about 10 km/h, since junction crashes are often slow): closest approach < 0.3 of their size, held for 2 updates. Duplicate boxes are merged, far-field objects and far-carriageway pairs are skipped (image-space geometry is too compressed there), and same-direction pairs count only as fast rear-end closings. On the samples, which contain no crashes, the score is ≥ 0.5 in under 1 % of frames (9 alarm runs in 18 minutes); on the two crash clips it passes 0.5 at or before the contact. An earlier version was ≥ 0.5 in 36–60 % of frames because of duplicate boxes and perspective convergence.
 - **Accidents are proposed by the tracks and confirmed by a vision-language model.** A candidate is the first moment two road
-  users' boxes touch (ground-point gap < 0.5 of the larger body diagonal) while one of them drives at ≥ 0.5 diag/s and the gap
-  shrank by ≥ 0.3 diag over the last second. Two seconds later, both must have slowed below 0.5 diag/s and still be within one
-  diagonal of each other: vehicles that drive on or apart are dropped. This cuts ~170 raw candidates per 5-minute sample to ~20.
-  Crash-model hits at conf ≥ 0.3 are also candidates. Each candidate is shown to InternVL2.5-1B as 4 frames (from 1 s before
-  contact to 2 s after), cropped to a square around the pair, with the question "has an accident or collision happened?".
-  p(yes) is read from the Yes/No logits of a single forward pass (no text generation, deterministic, ~1 s per question).
-  The event is reported at p ≥ 0.7, from the contact to the moment every involved road user has stopped or left.
-  The verifier is capped at 40 questions and 0.25× the video duration per video. It is loaded once when the harness imports
+  users' boxes touch (each grown by 5 % of its diagonal, because a head-on hit leaves two boxes side by side with almost no
+  overlap; ground points within 0.9 of the larger diagonal) while one of them drives at ≥ 0.5 diag/s and the gap shrank by
+  ≥ 0.3 diag over the last second. 2.5 s later, both must have slowed below 0.5 diag/s and still be within one diagonal of
+  each other: vehicles that drive on or apart are dropped. Crash-model hits at conf ≥ 0.3 are also candidates.
+  InternVL2.5-1B then sees 4–6 frames cropped to a square of 1.6× the pair's box and answers "has an accident or collision
+  happened?"; p(yes) is read from the Yes/No logits of one forward pass (no text generation, deterministic, ~0.7 s).
+  A first window (0.5 s before to 2.5 s after the contact) screens: below 0.5 the candidate is dropped. Otherwise four
+  windows around the contact are asked and the accident is reported if their mean is ≥ 0.7. One answer of this 1B model
+  moves by up to ~0.2 with the exact frames, so a single window was not reliable: on the samples a queue at C3902 reached
+  0.79 in one window, while its four-window mean is 0.62. The event runs from the contact until every involved road user
+  has stopped or left.
+- **Smoke after a crash.** Smoke often starts seconds after the impact, so a verified crash site is re-checked every 1.5 s
+  for 20 s (longer while smoke is seen) with "is there fire or smoke?". `fire_smoke` starts half a step before the first
+  "yes" and ends after two "no"s in a row or at the end of the video.
+- The verifier is capped at 60 questions and 0.25× the video duration per video. It is loaded once when the harness imports
   `solution.py`, and if its weights are missing Part A runs without it.
 - **Class policy.** `illegal_turn`, `illegal_u_turn` and `solid_line_crossing` are switched off: we do not have the permitted-manoeuvre map or the solid-line geometry, and a class predicted but absent from the test set costs macro-F1. The rule for each class and the reasoning are in `docs/class_policy.md`. All thresholds are in `src/config.py`.
 
@@ -131,14 +139,23 @@ patterns that each rule now excludes:
 
 | video | duration | events | by class | Part A | Part B | total / duration | risk >= 0.5 |
 |---|---|---|---|---|---|---|---|
-| C3896.MP4 | 340 s | 14 | failure_to_yield 4, jaywalking 7, red_light 1, stop_line 2 | 166 s | 216 s | 1.12x | 0.00% |
-| C3897.MP4 | 318 s | 16 | failure_to_yield 5, jaywalking 8, stop_line 2, stopped_vehicle 1 | 150 s | 203 s | 1.11x | 0.50% |
-| C3902.MP4 | 318 s | 24 | failure_to_yield 8, jaywalking 15, stop_line 1 | 159 s | 207 s | 1.15x | 0.35% |
-| C3905.MP4 | 128 s | 9 | congestion 1, failure_to_yield 4, jaywalking 2, stop_line 1, stopped_vehicle 1 | 67 s | 82 s | 1.17x | 0.00% |
+| C3896.MP4 | 340 s | 14 | failure_to_yield 4, jaywalking 7, red_light 1, stop_line 2 | 362 s | 260 s | 1.82x | 0.00% |
+| C3897.MP4 | 318 s | 16 | failure_to_yield 5, jaywalking 8, stop_line 2, stopped_vehicle 1 | 300 s | 238 s | 1.69x | 0.72% |
+| C3902.MP4 | 318 s | 24 | failure_to_yield 8, jaywalking 15, stop_line 1 | 361 s | 241 s | 1.89x | 0.38% |
+| C3905.MP4 | 128 s | 9 | congestion 1, failure_to_yield 4, jaywalking 2, stop_line 1, stopped_vehicle 1 | 155 s | 99 s | 1.98x | 0.00% |
 
-Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the video duration. These timings were measured
-before the accident verifier was added. With it, every event and risk value is identical, and it asked 8–31 questions per
-video (15–55 s, measured while another application was using the same GPU; see `docs/PROGRESS.md`).
+Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the video duration. Part A includes the
+verifier (14–35 questions, 10–27 s per video). Wall-clock time on this laptop depends on what else runs: 4K decoding is
+CPU-bound, and during this run the GPU was only ~40 % busy while other applications used the CPU. The same code took
+1.1–1.3× on the idle machine (`docs/PROGRESS.md`); the organizers' machine (T4, 8 cores) is dedicated.
+
+**Crash clips.** The samples contain no crash, so we also ran two 10 s clips of this camera with a crash (720p; they look
+generated from a sample frame, and are not in the repository):
+
+| clip | contact / smoke (by eye) | our events | Part B alarm (risk ≥ 0.5) | total |
+|---|---|---|---|---|
+| crash_video | contact ~3.6 s, smoke from ~6.8 s | accident 3.6–6.1 s, fire_smoke 7.4–10.0 s, red_light 1.9–9.9 s, failure_to_yield 1.1–2.1 s | from 3.4 s | 19.5 s of 30 s |
+| crash_video_2 | contact ~3.1 s, smoke from ~4.5 s | accident 3.1–5.6 s, fire_smoke 3.9–10.0 s, red_light 1.1–9.9 s | from 3.1 s | 19.8 s of 30 s |
 
 ---
 
@@ -146,10 +163,12 @@ video (15–55 s, measured while another application was using the same GPU; see
 
 - **No labelled dev set.** F1 has not been measured. `src/devset/csv_to_gt.py` converts per-video CSV labels (`start,end,label,note`) into `evaluate.py` ground truth, and `scripts/eval_dev.sh` runs the whole evaluation. Labelling the four samples is the next step.
 - `accident`, `near_miss`, `wrong_way`, `fire_smoke` and `road_obstacle` produced no events on the samples. Their rules are deliberately strict, so recall on the hidden set is unknown.
-- The accident verifier was checked on other cameras only (the samples contain no crash). Scanning whole TAD clips with
-  1.5 s windows at p ≥ 0.7, it flagged 11 of 20 accident clips and 0 of 19 normal clips (≈1,000 normal windows); on
-  single CCTV stills its ROC AUC is 0.76. On the four samples it answered 84 questions, the highest p(yes) was 0.29, and
-  no accident was reported. Its recall on the hidden set also depends on the track-based candidates.
+- The accident verifier was tuned on very little crash data: two 10 s crash clips of this camera (they look generated
+  from a sample frame), whose contacts it reports at the right time, and 108 candidate windows of the four samples, none
+  reported. The margin is modest (crash clips 0.77 and 0.80, highest sample 0.62, threshold 0.7). On other cameras,
+  scanning whole TAD clips it flagged 11 of 20 accident clips and 0 of 19 normal ones. Recall on the hidden set also
+  depends on the track-based candidates.
+- The website demo (CPU) does not report `accident` or `fire_smoke`: the verifier needs a GPU.
 - `jaywalking` ignores people within ~1 m of a zebra, island or kerb, which trades recall for precision.
 - The three turn/marking classes are off (see Class policy).
 - Part B is a heuristic (time-to-collision). It was not calibrated on real crashes because the samples contain none.

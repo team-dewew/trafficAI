@@ -1,8 +1,8 @@
 # Submission environment (organizers' GPU machine). Pinned: the results in
 # README / predictions_samples.json were produced with these versions.
-# The website has its own CPU dependency set in space/requirements.txt.
-torch>=2.6.0
-torchvision>=0.21.0
+# The website has its own CPU dependency set in requirements-web.txt.
+torch==2.6.0
+torchvision==0.21.0
 ultralytics==8.4.161
 supervision==0.30.5
 numpy>=1.26,<2.3

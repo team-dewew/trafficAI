@@ -1331,11 +1331,13 @@ elif selected_section == "Problem and Approach":
                         • <b>Gate</b>: confidence >= 0.6, box on the carriageway and covering a vehicle, positive in >= 3 of 4 consecutive checks.
                         Without the gate it fired on ordinary traffic.<br><br>
                         • <b>Verifier</b>: InternVL2.5-1B (OpenGVLab, MIT, 1.8 GB). The tracks propose a candidate when two road users touch
-                        while closing in and are still together, slowed down, 2 s later (weak crash-model hits count too). The verifier sees
-                        4 cropped frames from 1 s before to 2 s after the contact and answers "has an accident happened?";
-                        p(yes) >= 0.7 reports the accident. At most 40 questions per video (~1 s each on the GPU).<br>
-                        • <b>Checked on other cameras</b> (no crash in the samples): 11/20 TAD crash clips flagged, 0/19 normal clips.
-                        On the four samples: 84 questions, max p(yes) 0.29, no accident reported.
+                        while closing in and are still together, slowed down, 2.5 s later (weak crash-model hits count too). The verifier sees
+                        4-6 frames cropped around the pair and answers "has an accident happened?". A first window screens (p(yes) >= 0.5);
+                        then four windows around the contact are averaged, and a mean >= 0.7 reports the accident.<br>
+                        • <b>Smoke</b>: a verified crash site is re-checked every 1.5 s with "is there fire or smoke?".<br>
+                        • <b>Results</b>: two 10 s crash clips of this camera: <code>accident</code> 3.6-6.1 s and 3.1-5.6 s (contact at ~3.6 s / ~3.1 s),
+                        <code>fire_smoke</code> 7.4-10.0 s and 3.9-10.0 s. Four samples (no crash): 108 questions, highest mean 0.62, no accident.
+                        TAD crash clips (other cameras, full frame): 11/20 flagged, 0/19 normal clips.
                     </div>
                 </div>
                 """,
@@ -1354,7 +1356,7 @@ elif selected_section == "Problem and Approach":
                         • <b>Perspective guards</b>: duplicate car/truck boxes merged; far-field objects and pairs on the far carriageway ignored;
                         same-direction pairs count only when closing fast in the same lane (rear-end)<br>
                         • <b>Score</b>: logistic in TTC (0.5 at about 1.0 s), max over pairs, EMA smoothing (alpha 0.35).
-                        On the samples (no crashes) the score is >= 0.5 in under 0.5% of frames
+                        On the samples (no crashes) the score is >= 0.5 in under 1% of frames; on two crash clips of this camera it passes 0.5 at or before the contact
                     </div>
                 </div>
                 """,
@@ -1809,6 +1811,10 @@ elif selected_section == "Live Demo":
             <b>What runs here.</b> The submission pipeline (scene registration, signal read-out, tracking, the same rules and post-processing)
             in a CPU-friendly setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or VLM verifier, and the risk curve computed from the same
             causal tracks. The submission itself uses YOLO11-L at 960 px on every 3rd frame on a GPU, so results can differ slightly.<br>
+            <b>Accidents and smoke are not reported here.</b> In the submission they are confirmed by InternVL2.5-1B, which needs a GPU
+            (and ~2 GB more memory than this server has free). On a crash clip, the demo still shows the Part B risk rising before the
+            contact. Example, a 10 s crash clip of this camera: the GPU pipeline reports <code>accident</code> 3.6-6.1 s and
+            <code>fire_smoke</code> 7.4-10.0 s.<br>
             <b>Accepted input.</b> .mp4 (H.264), at most {DEMO_MAX_SEC / 60:.0f} minutes and {DEMO_MAX_MB} MB, from the competition camera
             (other cameras run, but the zones will not fit). <b>Expected time</b> on our 2-vCPU server: about the clip length
             for 720p and about 2x the clip length for 4K.
@@ -2000,8 +2006,8 @@ elif selected_section == "Report":
                     <b>• Reading the signal from its lamps</b> gives a clean red/green cycle on all four samples, day and dusk.<br><br>
                     <b>• Scale-free motion</b>: speeds are measured in body-diagonals per second of track ground points, so one threshold works near and far from the camera.<br><br>
                     <b>• Frame-level spot checks</b> of every candidate event (montages rendered from cached perception) exposed the real false-positive patterns quickly.<br><br>
-                    <b>• A vision-language model as a verifier, not a detector</b>: the tracks propose collision candidates and InternVL2.5-1B confirms them on 4 cropped frames. 84 questions on the samples, no false accident; 11 of 20 crash clips from another dataset (TAD) flagged, 0 of 19 normal clips.<br><br>
-                    <b>• Runtime</b>: YOLO11-L @960 FP16 on every 3rd frame and the anomaly model at 1 Hz keep Part A at about 0.5x real time on an RTX 3050 laptop GPU; the verifier adds 8-31 questions of 1-2 s each per video.
+                    <b>• A vision-language model as a verifier, not a detector</b>: the tracks propose collision candidates and InternVL2.5-1B confirms them on cropped frames around the contact. Both 10 s crash clips of this camera give <code>accident</code> and <code>fire_smoke</code> at the right times; 108 questions on the four samples give no false accident.<br><br>
+                    <b>• Runtime</b>: YOLO11-L @960 FP16 on every 3rd frame and the anomaly model at 1 Hz keep Part A at about 0.5x real time on an RTX 3050 laptop GPU; the verifier adds 14-35 questions per video (10-27 s).
                 </div>
             </div>
             """,

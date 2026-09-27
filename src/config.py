@@ -95,19 +95,22 @@ RULES = {
         "conf": 0.6,
         "hits": 3, "window": 4,      # >= hits positive checks among the last `window`
         # Collision candidates from the tracks, verified by the vision-language model (src/vlm.py)
-        "contact_diag": 0.5,         # ground-point gap / larger diagonal at contact
-        "contact_iou": 0.02,         # the two boxes must touch
+        "contact_diag": 0.9,         # ground-point gap / larger diagonal at contact (side-on hits are ~0.8 apart)
+        "touch_pad": 0.05,           # the two boxes must touch (each grown by this x its diagonal)
         "approach_diag": 0.3,        # the gap shrank by at least this much over the last second
         "min_speed": 0.5,            # diag/s: at least one of the two was driving before contact
         "cand_anomaly_conf": 0.3,    # crash-model hits at or above this also become candidates
-        "pre_sec": 1.0,              # frames shown to the verifier: from contact - pre_sec ...
-        "post_sec": 2.0,             # ... to contact + post_sec
+        # Verifier windows [s before contact, s after, frames]. The first one screens: below screen_p the
+        # candidate is dropped. Otherwise all are asked and their mean p(yes) must reach accept_p: one answer
+        # of this 1B model moves by up to ~0.2 with the exact frames, the mean of four is steadier.
+        "windows": [[0.5, 2.5, 4], [1.0, 2.0, 4], [1.0, 2.5, 5], [0.5, 2.5, 6]],
+        "screen_p": 0.5,
+        "post_sec": 2.5,             # the questions are asked this long after the contact (latest window end)
         "post_max_speed": 0.5,       # only asked if, post_sec after contact, both have slowed below this ...
         "post_max_gap": 1.0,         # ... and are still this close (a crash leaves them together)
-        "vlm_frames": 4,
-        "accept_p": 0.7,             # verifier p(yes) needed to report an accident (TAD clips: 11/20 crashes, 0/19 normal)
+        "accept_p": 0.7,             # mean verifier p(yes) needed to report an accident
         "dedup_sec": 5.0,            # one question per place and time
-        "max_calls": 40,             # per video
+        "max_calls": 60,             # per video (accident windows + smoke checks)
         "max_vlm_frac": 0.25,        # verifier time per video <= this x video duration
         "end_stop_speed": 0.1,       # the event ends once every involved road user is this slow ...
         "max_duration": 30.0,        # ... or gone, and never lasts longer than this
@@ -119,6 +122,8 @@ RULES = {
         "cand_anomaly_conf": 0.3,    # fire/smoke hits at or above this are verified by the VLM
         "accept_p": 0.6,
         "event_sec": 5.0,            # a verified sighting reports this much, merged with neighbours
+        "watch_step": 1.5,           # a verified crash site is checked for smoke every watch_step s ...
+        "watch_sec": 20.0,           # ... for this long after the contact (longer while smoke is seen)
     },
     "road_obstacle": {
         "min_duration": 2.0, "gap": 1.0,

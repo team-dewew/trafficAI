@@ -129,3 +129,29 @@ table above. Measured back to back under the same conditions on C3905, Part A to
   timm 1.0.15, einops 0.8.1, tokenizers 0.20.3.
 - Unit tests: a touching-then-stopping pair is asked about exactly once and reported at p = 0.95; the same pair is
   not reported at p = 0.1; a pair that drives on is never asked about; a weak fire hit is verified.
+
+## Crash clips (user test) and the fixes they led to
+
+Two 10 s, 720p clips of this camera with a crash and smoke (they look generated from a sample frame). The first run of
+the harness found neither the crash nor the smoke, and Part B stayed at 0. Causes and fixes, each checked on the clips
+and on the four samples:
+
+| problem | cause | fix |
+|---|---|---|
+| crash not proposed (clip 1) | side-on contact: ground points 0.8 diagonals apart, rule required < 0.5 | contact gap < 0.9 |
+| crash not proposed (clip 2) | nose-to-nose contact: boxes 3 px apart, rule required IoU ≥ 0.02 | boxes "touch" (each grown by 5 % of its diagonal) |
+| verifier said no (p 0.18) | crop 2.5× the box = almost the whole frame; cars too small | crop 1.6× the box |
+| one window unreliable | a queue in C3902 reached 0.79 in one window; a crash clip 0.59 in another | screen at 0.5, then mean of four windows ≥ 0.7 |
+| smoke missed | no crash-model smoke hit | re-check a verified crash site every 1.5 s ("fire or smoke?": 0.002–0.007 before, 0.80–0.94 after) |
+| smoke checks never ran | verifier time cap 0.25× duration = 2.5 s on a 10 s clip | cap at least min(6 s, 0.5× duration) |
+| Part B = 0 | both cars at 0.5–0.8 diag/s, gate required 0.8 | gate 0.5 diag/s (~10 km/h) |
+
+The verifier variants were compared on every candidate window of all six videos, scored live inside the pipeline
+(scripts in the session scratchpad, not in the repository): crash clips 0.77 / 0.80 (mean of four), highest sample
+candidate 0.62, 106 of 108 sample candidates stop at the screen.
+
+Final harness run (this commit's `predictions_samples.json`): every event on the four samples is unchanged, no
+`accident` / `fire_smoke`, Part B ≥ 0.5 in 0.00 / 0.72 / 0.38 / 0.00 % of frames (9 alarm runs, was 8). Crash clips:
+accident 3.6–6.1 s and 3.1–5.6 s, fire_smoke 7.4–10.0 s and 3.9–10.0 s, Part B alarm from 3.4 s and 3.1 s; 19.5 s and
+19.8 s of their 30 s budgets. The laptop was shared with other applications during the run (GPU ~40 % busy, 4K decoding
+CPU-bound): 1.69–1.98× on the samples, against 1.1–1.3× when idle.
