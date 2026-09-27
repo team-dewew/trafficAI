@@ -33,7 +33,7 @@
       "role": "EDA & evaluation",
       "did": "Sample-video EDA, metadata extraction, scene mapping, and harness evaluations.",
       "skills": ["EDA", "Pandas", "FFmpeg", "Visualisation"],
-      "links": {"GitHub": "#", "LinkedIn": "#"},
+      "links": {"GitHub": "https://github.com/team-dewew", "LinkedIn": "#"},
       "projects": [
         {"name": "Smart Greenhouse", "url": "#", "desc": "IoT automated climate control system for greenhouses"},
         {"name": "Agro Analytics", "url": "#", "desc": "Multispectral image analysis for crop yield prediction"},
