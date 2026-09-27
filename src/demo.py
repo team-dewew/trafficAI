@@ -36,7 +36,7 @@ DEMO_SETTINGS = {
     "max_width": 1280,         # frames are downscaled right after decoding (RAM on small servers)
 }
 DEMO_MAX_SEC = 120.0
-DEMO_MAX_MB = 300
+DEMO_MAX_MB = 800          # ~45 s of the 4K camera (~17.5 MB/s)
 MAX_CLIPS = 5
 CLIP_MAX_SEC = 12.0
 CLIP_WIDTH = 960

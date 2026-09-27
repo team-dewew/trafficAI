@@ -1,5 +1,5 @@
 [server]
-maxUploadSize = 300
+maxUploadSize = 800
 headless = true
 enableCORS = false
 enableXsrfProtection = false

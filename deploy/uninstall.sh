@@ -22,5 +22,10 @@ if [[ $PURGE -eq 1 ]]; then
   [[ -n "$DOMAIN" ]] && certbot delete --cert-name "$DOMAIN" --non-interactive 2>/dev/null || true
   rm -rf "$APP_DIR" /etc/trafficai
   id -u trafficai >/dev/null 2>&1 && userdel trafficai || true
+  if [[ -f /swapfile-trafficai ]]; then
+    swapoff /swapfile-trafficai 2>/dev/null || true
+    sed -i '\#^/swapfile-trafficai #d' /etc/fstab
+    rm -f /swapfile-trafficai
+  fi
 fi
 echo "[trafficai] removed (purge=$PURGE)"

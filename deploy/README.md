@@ -15,8 +15,8 @@ message that says what is wrong.
 | code | `/opt/trafficai/repo` (git, `master`), site bundle in `/opt/trafficai/site` | built by `scripts/build_space.py` |
 | Python env | `/opt/trafficai/venv` | CPU-only torch; ~2 GB of disk |
 | weights | `/opt/trafficai/data/weights/yolo11s.pt` (19 MB) | the website demo's detector |
-| service | systemd `trafficai` → Streamlit on **127.0.0.1:<free port 8600-8699>** | memory-capped (`MemoryMax=2200M`), `Nice=5`, restarts on failure, starts on boot |
-| web | nginx site `/etc/nginx/sites-available/trafficai.conf` for the domain | websockets, 300 MB uploads |
+| service | systemd `trafficai` → Streamlit on **127.0.0.1:<free port 8600-8699>** | memory-capped (`MemoryMax=3000M`), `Nice=5`, restarts on failure, starts on boot |
+| web | nginx site `/etc/nginx/sites-available/trafficai.conf` for the domain | websockets, 800 MB uploads (~45 s of 4K) |
 | TLS | Let's Encrypt via `certbot --nginx`, HTTP → HTTPS redirect | auto-renewal (certbot timer) + nginx reload hook |
 | settings | `/etc/trafficai/trafficai.env` | domain, port, branch, deployed commit |
 
@@ -31,8 +31,9 @@ and the Streamlit port is chosen so that it does not collide with anything alrea
   If Apache, Caddy, Traefik or a Docker proxy owns them, the installer stops without touching anything
   (see Troubleshooting).
 - At least 4 GB free disk in `/opt`.
-- **RAM:** processing one demo video peaks at about 1.2–1.4 GB. With less than 1.5 GB available the
-  installer only warns. The service is capped at 2.2 GB, so it cannot starve other services, but a
+- **RAM:** a demo peaks at about 2.5 GB with an 800 MB 4K upload (the upload stays in memory), 1.2–1.4 GB with a small one.
+  If swap is below 3.5 GB, the installer adds a 2 GB swap file `/swapfile-trafficai`. With less than 1.5 GB available the
+  installer only warns. The service is capped at 3.0 GB, so it cannot starve other services, but a
   demo may then be killed and restarted.
 
 ## Steps
@@ -90,7 +91,7 @@ renewal mechanism. `check.sh` must end with every line `OK` (exit code 0).
 | restart | `sudo systemctl restart trafficai` |
 | test certificate renewal | `sudo certbot renew --dry-run` |
 | remove (keep files + certificate) | `sudo bash /opt/trafficai/repo/deploy/uninstall.sh` |
-| remove everything | `sudo bash /opt/trafficai/repo/deploy/uninstall.sh --purge` |
+| remove everything (also the swap file) | `sudo bash /opt/trafficai/repo/deploy/uninstall.sh --purge` |
 
 ## Troubleshooting
 
@@ -99,7 +100,7 @@ renewal mechanism. `check.sh` must end with every line `OK` (exit code 0).
 
 - **"port 80/443 is served by: apache2 / caddy / docker-proxy ..."**: another web server owns the public
   ports. Do not stop it. Either add a reverse-proxy rule in that server for `trafficai.dewew.dev` →
-  `http://127.0.0.1:<PORT>` (with websocket upgrade and a 300 MB body limit) and obtain the certificate
+  `http://127.0.0.1:<PORT>` (with websocket upgrade and an 810 MB body limit) and obtain the certificate
   there, or run `install.sh` with `--skip-dns-check` only after nginx owns 80/443.
 - **"DOMAIN points to X but this server is Y"**: fix the DNS `A` record and wait for it to propagate
   (`getent ahostsv4 trafficai.dewew.dev`). Behind a NAT or proxy on purpose, use `--skip-dns-check`.

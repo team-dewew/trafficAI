@@ -66,7 +66,7 @@ separate dependencies:
   the Space's settings never change the submission's requirements.
 
 The live demo runs the same pipeline in a CPU setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or verifier, and the risk
-curve from the same causal tracks (`src/demo.py`). It accepts clips up to 2 minutes / 300 MB. On 2 vCPUs, a 35 s 720p clip
+curve from the same causal tracks (`src/demo.py`). It accepts clips up to 2 minutes / 800 MB (about 45 s of 4K). On 2 vCPUs, a 35 s 720p clip
 takes about 35 s and 4K takes about 2× the clip length.
 
 ---

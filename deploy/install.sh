@@ -4,14 +4,15 @@
 #   sudo bash deploy/install.sh --domain trafficai.dewew.dev [--email you@example.com]
 #
 # What it does (safe to re-run; it never stops or reconfigures other services):
-#   1. preflight: root, OS, disk, memory, DNS of the domain -> this server, who owns ports 80/443
+#   1. preflight: root, OS, disk, memory (+ a swap file if swap is small), DNS of the domain -> this server,
+#      who owns ports 80/443
 #   2. apt packages: python3-venv, git, nginx (only if nothing else serves 80/443), certbot
 #   3. system user 'trafficai', code in /opt/trafficai (repo -> website bundle via scripts/build_space.py)
 #   4. Python venv with the CPU dependency set (space/requirements.txt + the Space's Streamlit version)
 #   5. demo detector weights, kept outside the bundle so updates do not re-download them
 #   6. a free localhost port (default range 8600-8699) that no other service uses
 #   7. systemd service (memory-capped, restarts on failure, starts on boot)
-#   8. nginx site for the domain -> 127.0.0.1:<port> (websockets, 300 MB uploads)
+#   8. nginx site for the domain -> 127.0.0.1:<port> (websockets, 800 MB uploads)
 #   9. Let's Encrypt certificate (HTTP -> HTTPS redirect) with automatic renewal + nginx reload hook
 #  10. health checks over localhost and HTTPS, and a real run of the demo pipeline on the bundled clip
 set -Eeuo pipefail
@@ -26,8 +27,10 @@ APP_DIR="/opt/trafficai"
 PORT=""
 PORT_RANGE_START=8600
 PORT_RANGE_END=8699
-MEMORY_MAX="2200M"
-MEMORY_HIGH="1800M"
+MEMORY_MAX="3000M"        # measured: 768 MB upload held by Streamlit + 4K processing -> 2.5 GB peak RSS
+MEMORY_HIGH="2700M"
+UPLOAD_MB=800
+SWAP_SIZE="2G"            # swap file added when the server has less than 3.5 GB of swap; 0 = never
 SKIP_DNS_CHECK=0
 SKIP_SMOKE=0
 CONTAINER_TEST=0          # CI/containers without systemd: skip systemd/nginx/certbot/DNS
@@ -51,6 +54,7 @@ Options:
   --dir PATH           install directory (default: $APP_DIR)
   --port N             localhost port for Streamlit (default: first free in $PORT_RANGE_START-$PORT_RANGE_END)
   --memory-max SIZE    systemd MemoryMax for the service (default: $MEMORY_MAX)
+  --swap SIZE          swap file /swapfile-trafficai if swap < 3.5 GB (default: $SWAP_SIZE; 0 = none)
   --skip-dns-check     do not require the domain's A record to point at this server
   --skip-smoke         skip the demo pipeline smoke test
   --container-test     install + run without systemd/nginx/certbot (for testing in a container)
@@ -66,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --dir) APP_DIR="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --memory-max) MEMORY_MAX="$2"; shift 2 ;;
+    --swap) SWAP_SIZE="$2"; shift 2 ;;
     --skip-dns-check) SKIP_DNS_CHECK=1; shift ;;
     --skip-smoke) SKIP_SMOKE=1; shift ;;
     --container-test) CONTAINER_TEST=1; SKIP_DNS_CHECK=1; shift ;;
@@ -105,6 +110,28 @@ if (( avail_mb < 1500 )); then
   warn "only ${avail_mb} MB RAM available. The demo peaks at ~1.2-1.4 GB while processing a video."
   warn "It is capped at MemoryMax=${MEMORY_MAX} so it cannot starve other services, but free some RAM"
   warn "(or add swap) for reliable demos. Continuing."
+fi
+
+# An 800 MB upload sits in memory while it is processed. On a small server, a swap file keeps
+# a demo from being killed instead of starving other services. Created once, kept across updates.
+SWAP_FILE="/swapfile-trafficai"
+swap_total_mb=$(awk '/SwapTotal/ {print int($2/1024)}' /proc/meminfo)
+if [[ $CONTAINER_TEST -eq 0 && "$SWAP_SIZE" != "0" && ! -f "$SWAP_FILE" ]] && (( swap_total_mb < 3500 )); then
+  swap_gb=$(tr -dc '0-9' <<< "$SWAP_SIZE")
+  root_free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+  if (( root_free_gb >= swap_gb + 6 )); then
+    log "adding a ${SWAP_SIZE} swap file $SWAP_FILE (swap now ${swap_total_mb} MB)"
+    if { fallocate -l "$SWAP_SIZE" "$SWAP_FILE" 2>/dev/null \
+           || dd if=/dev/zero of="$SWAP_FILE" bs=1M count=$(( swap_gb * 1024 )) status=none; } \
+       && chmod 600 "$SWAP_FILE" && mkswap "$SWAP_FILE" >/dev/null && swapon "$SWAP_FILE"; then
+      grep -q "^$SWAP_FILE " /etc/fstab || echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
+    else
+      rm -f "$SWAP_FILE"
+      warn "could not add swap; continuing without it"
+    fi
+  else
+    warn "not adding swap: only ${root_free_gb} GB free on /"
+  fi
 fi
 
 command -v ss >/dev/null || { apt-get update -qq && apt-get install -y -qq iproute2 >/dev/null; }
@@ -238,7 +265,7 @@ assert {'stop_line', 'red_light'} <= set(labels), r.events
 }
 
 STREAMLIT_ARGS="run app.py --server.address 127.0.0.1 --server.port $PORT --server.headless true \
---server.enableCORS true --server.enableXsrfProtection true --server.maxUploadSize 300 \
+--server.enableCORS true --server.enableXsrfProtection true --server.maxUploadSize $UPLOAD_MB \
 --server.fileWatcherType none --browser.gatherUsageStats false"
 
 if [[ $CONTAINER_TEST -eq 1 ]]; then
@@ -317,6 +344,7 @@ EOF
 # keep the TLS lines certbot added on earlier runs; otherwise start from a plain HTTP server block
 if [[ -f "$NGINX_SITE" ]] && grep -q "managed by Certbot" "$NGINX_SITE"; then
   sed -i -E "s#proxy_pass http://127\.0\.0\.1:[0-9]+;#proxy_pass http://127.0.0.1:$PORT;#" "$NGINX_SITE"
+  sed -i -E "s#client_max_body_size [0-9]+m;#client_max_body_size $(( UPLOAD_MB + 10 ))m;#" "$NGINX_SITE"
 else
   cat > "$NGINX_SITE" <<EOF
 # Traffic AI website -> Streamlit on 127.0.0.1:$PORT (written by deploy/install.sh)
@@ -325,7 +353,7 @@ server {
     listen [::]:80;
     server_name $DOMAIN;
 
-    client_max_body_size 310m;
+    client_max_body_size $(( UPLOAD_MB + 10 ))m;
 
     location / {
         proxy_pass http://127.0.0.1:$PORT;
