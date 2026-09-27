@@ -1,5 +1,3 @@
-> [!WARNING]
-> **?? MUHIM: Kod barqaror ishlashi uchun kompyuteringizda Python 3.11 yoki 3.12 o'rnatilganligiga ishonch hosil qiling! Python 3.13 yoki undan yuqori versiyalarda kutubxonalar ishlamaydi.**
 
 # Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
