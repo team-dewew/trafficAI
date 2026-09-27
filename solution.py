@@ -32,6 +32,27 @@ seed_everything()
 from src.events import run_part_a  # noqa: E402
 from src.risk import RiskCore  # noqa: E402
 
+
+def _load_models() -> None:
+    """Load every model once, when the harness imports this module, so that loading
+    (a few seconds, mostly the 1B verifier) is not charged to the first video's time budget.
+    Missing weights are reported by the first detect_events call instead."""
+    from src.config import PERCEPTION
+    from src.models import load_yolo
+
+    try:
+        for name in (PERCEPTION["detector"], PERCEPTION["anomaly_model"], "yolov8n.pt"):
+            load_yolo(name)
+        if PERCEPTION.get("use_vlm"):
+            from src.vlm import get_verifier
+
+            get_verifier()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[solution] model preload skipped: {type(exc).__name__}: {exc}")
+
+
+_load_models()
+
 # Official class ids (14). Classes switched off in src/config.py:ENABLED_CLASSES
 # are simply never emitted.
 CLASSES: list[str] = [
@@ -59,7 +80,12 @@ def detect_events(video_path: str, progress_callback=None) -> list[list]:
 
     `progress_callback(frame_idx, n_frames)` is optional (used by the website).
     """
-    events, _ = run_part_a(video_path, progress_callback=progress_callback)
+    events, diag = run_part_a(video_path, progress_callback=progress_callback)
+    vlm = diag.get("vlm") or {}
+    if vlm.get("enabled"):
+        ps = [q["p"] for q in vlm["log"] if q.get("p") is not None]
+        print(f"[vlm] {len(ps)} questions in {vlm['sec']}s, max p(yes) {max(ps, default=0.0):.2f}, "
+              f"top: {sorted(((q['p'], q['kind'], q['t']) for q in vlm['log'] if q.get('p') is not None), reverse=True)[:3]}")
     return events
 
 

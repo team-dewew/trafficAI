@@ -1093,6 +1093,10 @@ with st.sidebar:
                 <span class="specs-val">YOLOv8x Crash</span>
             </div>
             <div class="specs-row">
+                <span class="specs-label">Crash Verifier</span>
+                <span class="specs-val">InternVL2.5-1B</span>
+            </div>
+            <div class="specs-row">
                 <span class="specs-label">Object Tracker</span>
                 <span class="specs-val">ByteTrack (Causal)</span>
             </div>
@@ -1211,7 +1215,7 @@ elif selected_section == "Problem and Approach":
         module_num="02",
         eyebrow_suffix="SYSTEM ARCHITECTURE",
         title="Problem Statement & Technical Approach",
-        subtitle="YOLO11-L + ByteTrack + per-video scene registration + rule engine; YOLOv8x anomaly model for crashes and fire",
+        subtitle="YOLO11-L + ByteTrack + per-video scene registration + rule engine; accident candidates confirmed by InternVL2.5-1B",
         badge_text="APPROACH",
         mini_spec="3.0x BUDGET COMPLIANT",
     )
@@ -1278,6 +1282,7 @@ elif selected_section == "Problem and Approach":
             S --> E
             K --> E
             V --> A[Anomaly YOLOv8x @1 Hz] --> E
+            E --> C[Accident / fire candidates] --> L[InternVL2.5-1B yes/no on 4 frames] --> E
             E --> P[Merge / clip / drop blips] --> O[events]
             V --> B[Part B: YOLOv8n every 3rd frame, TTC on collision course, EMA] --> Q[risk curve]
         ```
@@ -1286,7 +1291,7 @@ elif selected_section == "Problem and Approach":
         st.markdown(
             """
             <div class="pill-strip">
-                <div class="pill-item">Learned: <b>YOLO11-L</b> (COCO), <b>YOLOv8n</b> (COCO), <b>YOLOv8x anomaly model</b> (accident / fire / smoke)</div>
+                <div class="pill-item">Learned: <b>YOLO11-L</b> (COCO), <b>YOLOv8n</b> (COCO), <b>YOLOv8x anomaly model</b> (accident / fire / smoke), <b>InternVL2.5-1B</b> (open VLM, verifies candidates)</div>
                 <div class="pill-item">Rule-based: registration, signal state, tracking logic, every event rule, risk score</div>
                 <div class="pill-item">No training on our side; thresholds tuned by frame-level inspection of the sample videos</div>
             </div>
@@ -1310,7 +1315,7 @@ elif selected_section == "Problem and Approach":
             st.json(RULES)
 
     with approach_tabs[2]:
-        st.markdown("#### Learned anomaly model and Part B")
+        st.markdown("#### Learned models and Part B")
         r_c1, r_c2 = st.columns(2)
         with r_c1:
             st.markdown(
@@ -1321,7 +1326,13 @@ elif selected_section == "Problem and Approach":
                         • <b>Model</b>: open-weights YOLOv8x fine-tuned on the Roboflow "Accident Evaluator" dataset for crash severity and fire/smoke (<code>epoch90.pt</code> from Enos-123/accident-evaluator-yolov8x, MIT, used unchanged)<br>
                         • <b>Rate</b>: once per second of video<br>
                         • <b>Gate</b>: confidence >= 0.6, box on the carriageway and covering a vehicle, positive in >= 3 of 4 consecutive checks.
-                        Without the gate it fired on ordinary traffic.
+                        Without the gate it fired on ordinary traffic.<br><br>
+                        • <b>Verifier</b>: InternVL2.5-1B (OpenGVLab, MIT, 1.8 GB). The tracks propose a candidate when two road users touch
+                        while closing in and are still together, slowed down, 2 s later (weak crash-model hits count too). The verifier sees
+                        4 cropped frames from 1 s before to 2 s after the contact and answers "has an accident happened?";
+                        p(yes) >= 0.7 reports the accident. At most 40 questions per video (~1 s each on the GPU).<br>
+                        • <b>Checked on other cameras</b> (no crash in the samples): 11/20 TAD crash clips flagged, 0/19 normal clips.
+                        On the four samples: 84 questions, max p(yes) 0.29, no accident reported.
                     </div>
                 </div>
                 """,
@@ -1793,7 +1804,7 @@ elif selected_section == "Live Demo":
         <div class="glass-panel" style="margin-bottom: 14px;">
             <div style="color:#94a3b8;font-size:0.88rem;line-height:1.6;">
             <b>What runs here.</b> The submission pipeline (scene registration, signal read-out, tracking, the same rules and post-processing)
-            in a CPU-friendly setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model, and the risk curve computed from the same
+            in a CPU-friendly setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or VLM verifier, and the risk curve computed from the same
             causal tracks. The submission itself uses YOLO11-L at 960 px on every 3rd frame on a GPU, so results can differ slightly.<br>
             <b>Accepted input.</b> .mp4 (H.264), at most {DEMO_MAX_SEC / 60:.0f} minutes and {DEMO_MAX_MB} MB, from the competition camera
             (other cameras run, but the zones will not fit). <b>Expected time</b> on the free 2-vCPU host: about the clip length
@@ -2019,7 +2030,7 @@ elif selected_section == "Report":
                     <b>• Label the four samples</b> (CSV per video -> <code>python -m src.devset.csv_to_gt</code>) and tune every threshold against <code>evaluate.py</code>.<br><br>
                     <b>• Map the permitted manoeuvres</b> (entry/exit gates per approach) to switch the turn classes back on.<br><br>
                     <b>• Ground-plane homography</b> for metric speeds and distances (better TTC for Part B and near-miss).<br><br>
-                    <b>• A learned crash/near-miss model</b> fine-tuned on public CCTV crash data (e.g. CCD, DoTA) with a clear licence.
+                    <b>• Fine-tune the crash verifier</b> on public CCTV crash data (e.g. TAD, CCD, DoTA) and add a near-miss question.
                 </div>
             </div>
             """,
@@ -2048,6 +2059,8 @@ elif selected_section == "Links":
         ("yolov8n.pt", "Part B detector", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt", "AGPL-3.0"),
         ("accident_model.pt", "crash / fire / smoke model (epoch90.pt, renamed)",
          "https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights", "MIT"),
+        ("InternVL2_5-1B/", "accident / fire verifier (whole repository, commit 9d423ea)",
+         "https://huggingface.co/OpenGVLab/InternVL2_5-1B", "MIT"),
         ("yolo11s.pt", "website demo detector only", "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt", "AGPL-3.0"),
     ]
     c1, c2, c3 = st.columns(3)

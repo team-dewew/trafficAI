@@ -57,9 +57,12 @@ def _cos(v: tuple[float, float], u: np.ndarray) -> float:
 
 
 class RuleEngine:
-    def __init__(self, scene: dict, signal: SignalState) -> None:
+    def __init__(self, scene: dict, signal: SignalState, verifier=None) -> None:
+        """`verifier(kind, t_from, t_to, box, n_frames) -> p(yes) | None` answers a yes/no question
+        about recent frames (src/vlm.py). Without one, accident/fire candidates are only logged."""
         self.scene = scene
         self.signal = signal
+        self.verifier = verifier
         self.store = TrackStore()
         self.raw: list = []                  # [start, end, label, key] candidates
         self.events: list[list] = []         # final [start, end, label]
@@ -86,6 +89,14 @@ class RuleEngine:
         self.moved: set[int] = set()                 # tracks seen driving at some point (not parked)
         self.anom_hist = {"accident": deque(maxlen=RULES["accident"]["window"]),
                           "fire_smoke": deque(maxlen=RULES["fire_smoke"]["window"])}
+        # collision candidates -> verifier -> accident events
+        self.acc_pairs: set[tuple[int, int]] = set()
+        self.acc_pending: list[dict] = []
+        self.acc_seen: list[tuple[float, np.ndarray]] = []
+        self.acc_active: list[dict] = []
+        self.fire_pending: list[dict] = []
+        self.fire_seen: list[float] = []
+        self.vlm_log: list[dict] = []                # every question asked (or skipped), for diagnostics
         up = scene["ltr_upstream"]
         self.up_sign_strict = np.sign(line_side(scene["stop_line_strict"], *up))
 
@@ -137,8 +148,11 @@ class RuleEngine:
         self._wrong_way(t, motor)
         self._congestion(t, motor)
         self._near_miss(t, motor, peds)
+        self._collisions(t, motor, peds)
         self._obstacles(t, tracks)
         self._anomaly(t, obs, motor)
+        self._verify_pending(t)
+        self._track_accidents(t)
 
         for h in self._hyst:
             h.sweep(t)
@@ -345,6 +359,109 @@ class RuleEngine:
         if end - st["start"] >= RULES["near_miss"]["min_duration"]:
             self.raw.append([st["start"], end, "near_miss", key])
 
+    def _collisions(self, t: float, motor: list[TrackState], peds: list[TrackState]) -> None:
+        """Propose a collision candidate the first time two road users touch while closing in."""
+        cfg, s = RULES["accident"], self.scene
+        users = [u for u in motor + peds if in_any(s["road"], *u.pos)]
+        for i in range(len(users)):
+            for j in range(i + 1, len(users)):
+                a, b = users[i], users[j]
+                if a.cls == "pedestrian" and b.cls == "pedestrian":
+                    continue
+                key = (min(a.tid, b.tid), max(a.tid, b.tid))
+                if key in self.acc_pairs or box_iou(a.box, b.box) < cfg["contact_iou"]:
+                    continue
+                big = max(a.diag, b.diag)
+                gap = float(np.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1])) / big
+                if gap >= cfg["contact_diag"]:
+                    continue
+                pa, pb = a.point_ago(1.0), b.point_ago(1.0)
+                if pa is None or pb is None:
+                    continue
+                gap_before = float(np.hypot(pa[1] - pb[1], pa[2] - pb[2])) / big
+                if gap_before - gap < cfg["approach_diag"]:
+                    continue
+                speeds = [u.speed_rel(1.0) for u in (a, b)]
+                v_pre = max((v for v in speeds if v is not None), default=0.0)
+                if v_pre < cfg["min_speed"]:
+                    continue
+                self.acc_pairs.add(key)
+                union = np.array([min(a.box[0], b.box[0]), min(a.box[1], b.box[1]),
+                                  max(a.box[2], b.box[2]), max(a.box[3], b.box[3])])
+                self._propose_accident(t, key, union, "tracks",
+                                       {"v_pre": v_pre, "closing": gap_before - gap, "gap": gap})
+
+    def _propose_accident(self, t: float, tids: tuple, box: np.ndarray, source: str,
+                          feats: dict | None = None) -> None:
+        cfg = RULES["accident"]
+        for t_s, b_s in self.acc_seen:
+            if abs(t - t_s) < cfg["dedup_sec"] and box_iou(box, b_s) > 0.1:
+                return
+        self.acc_seen.append((t, box))
+        self.acc_pending.append({"t0": t, "tids": tids, "box": box, "source": source, "feats": feats or {}})
+
+    def _verify_pending(self, t: float) -> None:
+        cfg = RULES["accident"]
+        for c in [c for c in self.acc_pending if t >= c["t0"] + cfg["post_sec"]]:
+            self.acc_pending.remove(c)
+            after = self._after(c)
+            if c["source"] == "tracks" and (after.get("v_post", 0.0) >= cfg["post_max_speed"]
+                                            or after.get("gap_post", 0.0) >= cfg["post_max_gap"]):
+                continue          # they drove on / apart: not a crash
+            p = None
+            if self.verifier is not None:
+                p = self.verifier("accident", c["t0"] - cfg["pre_sec"], c["t0"] + cfg["post_sec"], c["box"],
+                                  cfg["vlm_frames"])
+            self.vlm_log.append({"kind": "accident", "t": round(c["t0"], 2), "source": c["source"],
+                                 "p": None if p is None else round(p, 4),
+                                 **{k: round(float(v), 3) for k, v in {**c["feats"], **after}.items()}})
+            if p is not None and p >= cfg["accept_p"]:
+                self.acc_active.append({"start": c["t0"], "tids": c["tids"], "key": ("vlm", c["tids"])})
+        fcfg = RULES["fire_smoke"]
+        for c in list(self.fire_pending):
+            self.fire_pending.remove(c)
+            p = None
+            if self.verifier is not None:
+                p = self.verifier("fire_smoke", c["t0"], c["t0"], c["box"], 1)
+            self.vlm_log.append({"kind": "fire_smoke", "t": round(c["t0"], 2), "source": "anomaly",
+                                 "p": None if p is None else round(p, 4)})
+            if p is not None and p >= fcfg["accept_p"]:
+                self.raw.append([c["t0"], c["t0"] + fcfg["event_sec"], "fire_smoke", "vlm"])
+
+    def _after(self, c: dict) -> dict:
+        """How the candidate's road users behave `post_sec` after contact."""
+        pts, speeds = [], []
+        for tid in c["tids"]:
+            tr = self.store.tracks.get(tid)
+            if tr is None or not tr.hist:
+                continue
+            pts.append((tr.pos, tr.diag))
+            spd = tr.speed_rel(1.0)
+            if spd is not None:
+                speeds.append(spd)
+        out = {"n_seen": len(pts)}
+        if speeds:
+            out["v_post"] = max(speeds)
+        if len(pts) == 2:
+            (p1, d1), (p2, d2) = pts
+            out["gap_post"] = float(np.hypot(p1[0] - p2[0], p1[1] - p2[1])) / max(d1, d2)
+        return out
+
+    def _track_accidents(self, t: float) -> None:
+        """A verified accident ends once every involved road user has stopped or left the frame."""
+        cfg = RULES["accident"]
+        for a in list(self.acc_active):
+            moving = False
+            for tid in a["tids"]:
+                tr = self.store.tracks.get(tid)
+                if tr is not None and t - tr.last_t < 1.0:
+                    spd = tr.speed_rel(0.5)
+                    moving = moving or (spd is not None and spd >= cfg["end_stop_speed"])
+            elapsed = t - a["start"]
+            if (not moving and elapsed >= cfg["post_sec"]) or elapsed >= cfg["max_duration"]:
+                self.acc_active.remove(a)
+                self.raw.append([a["start"], t, "accident", a["key"]])
+
     def _obstacles(self, t: float, tracks: list[TrackState]) -> None:
         cfg, s = RULES["road_obstacle"], self.scene
         people = [tr.box for tr in tracks if tr.cls == "pedestrian"]
@@ -372,6 +489,14 @@ class RuleEngine:
                 continue
             is_acc = name in ACCIDENT_NAMES or any(w in name for w in ACCIDENT_WORDS)
             is_fire = "fire" in name or "smoke" in name
+            if is_acc and conf >= RULES["accident"]["cand_anomaly_conf"]:
+                covered = tuple(sorted(v.tid for v in motor if box_iou(box, v.box) > 0.1))
+                if covered:
+                    self._propose_accident(t, covered, box, "anomaly")
+            elif is_fire and conf >= RULES["fire_smoke"]["cand_anomaly_conf"]:
+                if not any(abs(t - t_s) < RULES["accident"]["dedup_sec"] for t_s in self.fire_seen):
+                    self.fire_seen.append(t)
+                    self.fire_pending.append({"t0": t, "box": box})
             if is_acc and conf >= RULES["accident"]["conf"]:
                 # a crash involves road users: the box must cover at least one vehicle
                 if any(box_iou(box, v.box) > 0.1 for v in motor):
@@ -409,6 +534,11 @@ class RuleEngine:
         self.fty.clear()
         for key in list(self.nm_active):
             self._close_nm(key, self.nm_active[key]["last"])
+        self._verify_pending(float("inf"))
+        for a in self.acc_active:
+            self.raw.append([a["start"], min(duration, a["start"] + RULES["accident"]["max_duration"]),
+                             "accident", a["key"]])
+        self.acc_active.clear()
         # events still running at the end of the clip end at the clip end
         for h in self._hyst:
             for key in list(h.active):

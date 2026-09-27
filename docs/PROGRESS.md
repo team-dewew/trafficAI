@@ -8,10 +8,10 @@ Machine: Windows 11, RTX 3050 laptop GPU (8 GB), Python 3.12, torch 2.6.0+cu124.
 
 ```
 $ python -m pytest -q
-26 passed in 41.95s
+30 passed in 57.98s
 ```
 
-- `tests/test_units.py`: post-processing, signal read-out and debounce, registration (identity and a known shift), the congestion regression (brand-new tracks), rider ≠ jaywalker, jaywalker detected, Part B pair risk.
+- `tests/test_units.py`: post-processing, signal read-out and debounce, registration (identity and a known shift), the congestion regression (brand-new tracks), rider ≠ jaywalker, jaywalker detected, Part B pair risk, accident candidates and the verifier (stubbed), weak fire hits.
 - `tests/test_smoke.py`: 8 s clip through the unchanged `run_submission.py` (no errors in the log, risk in [0, 1]), `evaluate.py --validate-only`, `import app`.
 - `tests/test_website.py`: all 7 website sections render (Streamlit AppTest), and a click-through of the live demo on the
   bundled clip (Run -> events `stop_line` 6.8-16.2 s and `red_light` 19.0-34.0 s, the same events the full pipeline
@@ -88,3 +88,42 @@ format: 4 video(s), 63 event(s), 0 error(s), 0 warning(s) -> VALID
 - **Fixed during this check:** `weights/download.sh` failed its final checksum step when `SHA256SUMS` was
   checked out with CRLF line endings (Windows `core.autocrlf`). The committed file is LF, so Linux was not
   affected. The script now strips `\r` before `sha256sum -c`, and `.gitattributes` pins LF for it.
+
+## Accident verifier (InternVL2.5-1B)
+
+Weights: the whole `OpenGVLab/InternVL2_5-1B` repository at commit `9d423ea` (21 files, 1.8 GB), fetched by both
+`weights/download.sh` and `weights/download.py` and checked against `weights/SHA256SUMS`. The `model.safetensors` hash
+equals the LFS hash published by Hugging Face. All weights together: ≈2.1 GB (limit 5 GB).
+
+Zero-shot checks (fp16, RTX 3050), on data from other cameras, used for evaluation only:
+
+```
+CCTV stills (sherlockab/accident-detection-from-cctv-footage, test split, 47 accident + 53 normal)
+  ROC AUC 0.756; p >= 0.5: precision 0.81, recall 0.53
+TAD clips (via wbfwonderful/Vad-R1; 20 accident + 19 normal, random, seed 0), 1.5 s windows every 1 s, full frame
+  clip AUC 0.747; p >= 0.7: 11/20 accident clips flagged, 0/19 normal clips (~1,000 normal windows)
+Close vehicle pairs in C3896 / C3902 (50 random windows, cropped): max p(yes) 0.36
+```
+
+Harness on the four samples with the verifier on:
+
+```
+C3896  25 questions  54.9 s  max p(yes) 0.11   14 events
+C3897  20 questions  36.6 s  max p(yes) 0.14   16 events
+C3902  31 questions  52.2 s  max p(yes) 0.29   24 events
+C3905   8 questions  14.8 s  max p(yes) 0.10    9 events
+```
+
+Every event and every risk value is identical to `predictions_samples.json`: no accident was reported, and nothing
+else changed. The run shared the GPU with another application, so its wall-clock times are not comparable with the
+table above. Measured back to back under the same conditions on C3905, Part A took 125–137 s without the verifier and
+131 s with it (8 questions, 10.5 s).
+
+- Loading the verifier takes a few seconds. `solution.py` loads every model when the harness imports it, so this
+  is not charged to the first video's budget.
+- Offline: the harness run on an 8 s clip with every HTTP(S) request routed to a dead proxy and an empty `HF_HOME`
+  finished with no errors (the model code is read from `weights/InternVL2_5-1B/`, `local_files_only=True`).
+- Linux resolution of `requirements.txt` (Python 3.10/3.11/3.12): torch 2.6.0 (CUDA), transformers 4.46.3,
+  timm 1.0.15, einops 0.8.1, tokenizers 0.20.3.
+- Unit tests: a touching-then-stopping pair is asked about exactly once and reported at p = 0.95; the same pair is
+  not reported at p = 0.1; a pair that drives on is never asked about; a weak fire hit is verified.

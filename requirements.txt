@@ -8,3 +8,7 @@ supervision==0.30.5
 numpy>=1.26,<2.3
 opencv-python-headless==4.11.0.86
 lap>=0.5.12
+# InternVL2.5-1B accident / fire verifier (src/vlm.py)
+transformers==4.46.3
+timm==1.0.15
+einops==0.8.1

@@ -5,7 +5,7 @@ import time
 
 import cv2
 
-from src.config import PERCEPTION
+from src.config import PERCEPTION, RULES
 from src.perception import Perception
 from src.postprocess import finalize_events
 from src.registration import estimate_scene_transform, sample_frames
@@ -48,7 +48,15 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
     stride = int(cfg["stride"])
     perception = Perception(fps, stride, settings=cfg)
     signal = SignalState()
-    engine = RuleEngine(scene, signal)
+    verifier = None
+    if cfg.get("use_vlm", False):
+        from src.vlm import FrameWindowVerifier, get_verifier
+
+        vlm = get_verifier()
+        if vlm is not None:
+            verifier = FrameWindowVerifier(vlm, duration, cfg["vlm_buffer_sec"], cfg["vlm_buffer_width"],
+                                           RULES["accident"]["max_calls"], RULES["accident"]["max_vlm_frac"])
+    engine = RuleEngine(scene, signal, verifier=verifier)
 
     idx = 0
     t_loop = time.perf_counter()        # budget guard measures the frame loop only
@@ -68,6 +76,8 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
             raw = classify(lamp_scores(frame, scene["main_signal_lamps"], scene["px_scale"]))
             signal.update(t, raw)
             obs = perception(frame, t)
+            if verifier is not None:
+                verifier.push(t, frame)
             engine.update(obs)
             if obs_sink is not None:
                 obs_sink.append((obs, raw))
@@ -77,8 +87,10 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
             # Time guard: the harness budget is 3x duration for Part A + Part B together
             # (Part B needs ~0.7x). If perception runs slower than `budget_factor` x
             # real time, halve its rate for the rest of the video instead of failing.
+            # The verifier has its own cap (max_vlm_frac x duration) and is not counted here.
             if stride == cfg["stride"] and idx > fps * 30 and (idx // stride) % 30 == 0:
-                if time.perf_counter() - t_loop > cfg["budget_factor"] * (idx / fps):
+                vlm_sec = 0.0 if verifier is None else verifier.seconds
+                if time.perf_counter() - t_loop - vlm_sec > cfg["budget_factor"] * (idx / fps):
                     stride *= 2
     finally:
         cap.release()
@@ -97,6 +109,10 @@ def run_part_a(video_path: str, progress_callback=None, obs_sink: list | None = 
         "scene": scene,
         "signal": signal,
         "frame_scale": frame_scale,
+        "vlm": {"enabled": verifier is not None,
+                "calls": 0 if verifier is None else verifier.calls,
+                "sec": 0.0 if verifier is None else round(verifier.seconds, 1),
+                "log": engine.vlm_log},
     }
     return events, diag
 

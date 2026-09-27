@@ -102,3 +102,5 @@ tests/data/
 .ruff_cache/
 dist/
 .claude/
+
+weights/InternVL2_5-1B/

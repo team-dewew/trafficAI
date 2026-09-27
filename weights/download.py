@@ -7,6 +7,8 @@ Sources (see README -> Install and run):
     yolov8n.pt        Ultralytics release v8.3.0, AGPL-3.0            (Part B detector)
     yolo11s.pt        Ultralytics release v8.3.0, AGPL-3.0            (website CPU demo only)
     accident_model.pt Enos-123/accident-evaluator-yolov8x, weights/epoch90.pt, renamed; MIT
+    InternVL2_5-1B/   OpenGVLab/InternVL2_5-1B, the whole repository at commit 9d423ea; MIT
+                      (vision-language model that verifies accident candidates)
 """
 from __future__ import annotations
 
@@ -23,6 +25,20 @@ FILES = {
     "yolo11s.pt": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt",
     "accident_model.pt": "https://huggingface.co/Enos-123/accident-evaluator-yolov8x/resolve/main/weights/epoch90.pt",
 }
+
+# OpenGVLab/InternVL2_5-1B, every file of the repository, pinned to one commit so the download never changes
+VLM_DIR = "InternVL2_5-1B"
+VLM_REPO = "https://huggingface.co/OpenGVLab/InternVL2_5-1B/resolve/9d423ea1ae9f893897ee3f7493141073f5afcf22"
+VLM_FILES = [
+    ".gitattributes", "README.md", "added_tokens.json", "config.json", "configuration.json",
+    "configuration_intern_vit.py", "configuration_internvl_chat.py", "conversation.py",
+    "examples/image1.jpg", "examples/image2.jpg", "examples/red-panda.mp4", "generation_config.json",
+    "merges.txt", "model.safetensors", "modeling_intern_vit.py", "modeling_internvl_chat.py",
+    "preprocessor_config.json",
+    "runs/Nov22_02-53-47_HOST-10-140-60-109/events.out.tfevents.1732215525.HOST-10-140-60-109.69855.0",
+    "special_tokens_map.json", "tokenizer_config.json", "vocab.json",
+]
+FILES.update({f"{VLM_DIR}/{f}": f"{VLM_REPO}/{f}" for f in VLM_FILES})
 
 
 def _sha256(path: Path) -> str:
@@ -55,7 +71,8 @@ def download(names=None, log=print) -> None:
         if path.exists():
             continue
         log(f"Downloading {name} ...")
-        tmp = path.with_suffix(".part")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".part")
         try:
             urllib.request.urlretrieve(FILES[name], tmp)
             if name in sums and _sha256(tmp) != sums[name]:

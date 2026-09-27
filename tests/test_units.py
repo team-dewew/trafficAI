@@ -142,3 +142,51 @@ def test_pair_risk_head_on_vs_diverging():
 def test_pair_risk_slow_approach_does_not_overflow():
     """Regression: a very slow closing speed gave a huge TTC and math.exp overflowed."""
     assert pair_risk((0, 0), (50000, 0), (0.001, 0), (-0.001, 0), size=100) == 0.0
+
+
+# ---------------------------------------------------------------- accident candidates + verifier
+class _StubVerifier:
+    def __init__(self, p):
+        self.p, self.calls = p, []
+
+    def __call__(self, kind, t_from, t_to, box, n_frames):
+        self.calls.append((kind, round(t_from, 2), round(t_to, 2)))
+        return self.p
+
+
+def _crash_run(stub, drive_on=False):
+    eng = RuleEngine(build_scene(IDENTITY), SignalState(), verifier=stub)
+    for t in np.arange(0, 6.0, 0.1):
+        x = 500 + 300 * t                                  # car 1 drives at ~1.3 diag/s ...
+        if not drive_on:
+            x = min(x, 900)                                # ... and stops on contact with car 2
+        eng.update(_obs(t, [(1, (x, 560, x + 200, 680), "car"), (2, (1000, 560, 1200, 680), "car")]))
+    return [e for e in eng.finalize(6.0) if e[2] == "accident"]
+
+
+def test_collision_candidate_is_verified_and_reported():
+    stub = _StubVerifier(0.95)
+    events = _crash_run(stub)
+    assert len(stub.calls) == 1 and stub.calls[0][0] == "accident"
+    assert len(events) == 1 and 1.0 <= events[0][0] <= 1.6
+
+
+def test_rejected_candidate_gives_no_accident():
+    stub = _StubVerifier(0.1)
+    assert not _crash_run(stub) and len(stub.calls) == 1
+
+
+def test_vehicles_that_drive_on_are_not_asked_about():
+    stub = _StubVerifier(0.95)
+    assert not _crash_run(stub, drive_on=True) and not stub.calls
+
+
+def test_weak_fire_hit_is_verified():
+    stub = _StubVerifier(0.9)
+    eng = RuleEngine(build_scene(IDENTITY), SignalState(), verifier=stub)
+    for t in np.arange(0, 3.0, 0.1):
+        obs = _obs(t, [])
+        obs.anomaly = [("fire", 0.4, np.array([1000.0, 560.0, 1200.0, 680.0]))]
+        eng.update(obs)
+    events = [e for e in eng.finalize(10.0) if e[2] == "fire_smoke"]
+    assert stub.calls and stub.calls[0][0] == "fire_smoke" and len(events) == 1

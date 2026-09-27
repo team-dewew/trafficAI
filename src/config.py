@@ -23,6 +23,9 @@ PERCEPTION = {
     "stride": 3,               # Part A runs perception on every 3rd frame (~10 Hz)
     "anomaly_every_sec": 1.0,
     "budget_factor": 1.6,      # if Part A's frame loop runs slower than this x real time, stride is doubled
+    "use_vlm": True,           # verify accident / fire candidates with InternVL2.5-1B (skipped if absent)
+    "vlm_buffer_sec": 4.0,     # recent frames kept for the verifier
+    "vlm_buffer_width": 1920,  # ... downscaled to this width
 }
 
 # The traffic signal is read from its lamps (see src/traffic_light.py).
@@ -91,11 +94,31 @@ RULES = {
         "min_duration": 1.5, "gap": 2.0,
         "conf": 0.6,
         "hits": 3, "window": 4,      # >= hits positive checks among the last `window`
+        # Collision candidates from the tracks, verified by the vision-language model (src/vlm.py)
+        "contact_diag": 0.5,         # ground-point gap / larger diagonal at contact
+        "contact_iou": 0.02,         # the two boxes must touch
+        "approach_diag": 0.3,        # the gap shrank by at least this much over the last second
+        "min_speed": 0.5,            # diag/s: at least one of the two was driving before contact
+        "cand_anomaly_conf": 0.3,    # crash-model hits at or above this also become candidates
+        "pre_sec": 1.0,              # frames shown to the verifier: from contact - pre_sec ...
+        "post_sec": 2.0,             # ... to contact + post_sec
+        "post_max_speed": 0.5,       # only asked if, post_sec after contact, both have slowed below this ...
+        "post_max_gap": 1.0,         # ... and are still this close (a crash leaves them together)
+        "vlm_frames": 4,
+        "accept_p": 0.7,             # verifier p(yes) needed to report an accident (TAD clips: 11/20 crashes, 0/19 normal)
+        "dedup_sec": 5.0,            # one question per place and time
+        "max_calls": 40,             # per video
+        "max_vlm_frac": 0.25,        # verifier time per video <= this x video duration
+        "end_stop_speed": 0.1,       # the event ends once every involved road user is this slow ...
+        "max_duration": 30.0,        # ... or gone, and never lasts longer than this
     },
     "fire_smoke": {
         "min_duration": 2.0, "gap": 2.0,
         "conf": 0.6,
         "hits": 3, "window": 4,
+        "cand_anomaly_conf": 0.3,    # fire/smoke hits at or above this are verified by the VLM
+        "accept_p": 0.6,
+        "event_sec": 5.0,            # a verified sighting reports this much, merged with neighbours
     },
     "road_obstacle": {
         "min_duration": 2.0, "gap": 1.0,
@@ -121,7 +144,7 @@ ENABLED_CLASSES = [
 ]
 
 # Merge gap for same-class segments in post-processing.
-MERGE_GAP = {"congestion": 3.0, "stopped_vehicle": 2.0, "jaywalking": 1.0}
+MERGE_GAP = {"congestion": 3.0, "stopped_vehicle": 2.0, "jaywalking": 1.0, "fire_smoke": 5.0}
 DEFAULT_MERGE_GAP = 0.5
 MIN_SEGMENT = 0.5
 

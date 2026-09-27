@@ -18,8 +18,8 @@ frames of every candidate event on the four sample videos
 | `congestion` | on | ≥ 4 moving-lane vehicles in one carriageway with median speed < 0.12 diag/s for ≥ 8 s; `lane_ltr` must persist ≥ 12 s into green (not a red queue) | Rare. Ordinary red queues and parked cars no longer count |
 | `wrong_way` | on | vehicle in a carriageway (outside the junction) moving ≥ 0.4 diag/s with heading cos < −0.6 against the lane flow for ≥ 1.5 s | 0 events on the samples (none expected) |
 | `near_miss` | on | two road users close (< 0.8 diag), closing ≥ 0.3 diag in the last second, one braking hard (speed < 40 % of the previous second's), no box overlap | 0 events on the samples |
-| `accident` | on | anomaly model (conf ≥ 0.6) on a box that covers a vehicle, on the carriageway, in ≥ 3 of 4 consecutive 1 Hz checks | 0 events on the samples (the model fired on normal traffic at conf 0.45 in earlier versions) |
-| `fire_smoke` | on | anomaly model fire/smoke (conf ≥ 0.6) on the carriageway in ≥ 3 of 4 checks | 0 events on the samples |
+| `accident` | on | (1) two road users touch while closing in, then both slow down and stay together for 2 s (or the crash model fires at conf ≥ 0.3 on a vehicle); InternVL2.5-1B confirms on 4 frames around the contact (p(yes) ≥ 0.7). (2) The crash model alone at conf ≥ 0.6 in ≥ 3 of 4 checks | 0 events on the samples (84 verifier questions, max p(yes) 0.29). On TAD clips from other cameras: 11/20 crashes flagged, 0/19 normal clips |
+| `fire_smoke` | on | anomaly model fire/smoke (conf ≥ 0.6) on the carriageway in ≥ 3 of 4 checks, or a fire/smoke hit at conf ≥ 0.3 confirmed by InternVL2.5-1B (p(yes) ≥ 0.6) | 0 events on the samples |
 | `road_obstacle` | on | animal / unattended bag or suitcase on the carriageway, not carried (no person box on it), ≥ 2 s | 0 events on the samples |
 | `illegal_turn` | **off** | — | Needs the list of permitted manoeuvres per approach (road signs), which we do not have. The previous rule flagged every ordinary turn (10–15 per video) |
 | `illegal_u_turn` | **off** | — | Same reason |

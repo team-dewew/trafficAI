@@ -20,7 +20,7 @@ python run_submission.py --videos /data/test --out predictions.json
 python evaluate.py --pred predictions.json --validate-only
 ```
 
-`weights/download.sh` fetches the weights (≈210 MB total) and verifies them against `weights/SHA256SUMS`:
+`weights/download.sh` fetches the weights (≈2.1 GB total, limit 5 GB) and verifies them against `weights/SHA256SUMS`:
 
 | file | what | source | licence |
 |---|---|---|---|
@@ -28,6 +28,7 @@ python evaluate.py --pred predictions.json --validate-only
 | `yolov8n.pt` | light detector (Part B) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
 | `yolo11s.pt` | website CPU demo only (not used by the submission) | Ultralytics release v8.3.0 (COCO) | AGPL-3.0 |
 | `accident_model.pt` | YOLOv8x crash-severity / fire / smoke detector (classes: detected-injury, fire, high / medium / low severity, smoke) | [Enos-123/accident-evaluator-yolov8x](https://huggingface.co/Enos-123/accident-evaluator-yolov8x/tree/main/weights): the file `weights/epoch90.pt`, downloaded as-is and renamed to `accident_model.pt` (checksum in `weights/SHA256SUMS`) | MIT (as declared on the model card) |
+| `InternVL2_5-1B/` | vision-language model (1B) that verifies accident and fire/smoke candidates with a yes/no question | [OpenGVLab/InternVL2_5-1B](https://huggingface.co/OpenGVLab/InternVL2_5-1B): the whole repository (weights, model code, tokenizer, configs) pinned to commit `9d423ea`; every file is checksummed | MIT |
 
 ### Datasets
 
@@ -37,8 +38,17 @@ We trained nothing ourselves. The datasets below are the ones behind the pretrai
 |---|---|---|
 | COCO 2017 | `yolo11l.pt`, `yolov8n.pt`, `yolo11s.pt` (Ultralytics pretrained) | CC BY 4.0 (annotations) |
 | Roboflow "Accident Evaluator" | `accident_model.pt` (named as its training set on the model card) | not stated on the model card; the card links no dataset page |
+| InternVL 2.5 pre-training / fine-tuning data | `InternVL2_5-1B/` | listed on the model card |
 
-No other data was used. The scene layout was drawn by hand on a frame of the provided sample videos.
+Two public datasets were used **only to evaluate** the verifier (nothing was trained or tuned on them except the single
+acceptance threshold, and none of their files are in this repository):
+
+| dataset | what we used | licence |
+|---|---|---|
+| TAD (Traffic Anomaly Dataset), via [wbfwonderful/Vad-R1](https://huggingface.co/datasets/wbfwonderful/Vad-R1) (`Vad-Reasoning-RL/TAD/`) | 20 accident + 19 normal CCTV clips, drawn at random (seed 0) | research use, per the TAD authors; the Vad-R1 card states no licence |
+| [sherlockab/accident-detection-from-cctv-footage](https://huggingface.co/datasets/sherlockab/accident-detection-from-cctv-footage) | test split, 47 accident + 53 normal CCTV stills | MIT |
+
+The scene layout was drawn by hand on a frame of the provided sample videos.
 
 After the download, nothing else is fetched: the code loads weights only from
 `weights/` and raises an error instead of downloading anything.
@@ -55,7 +65,7 @@ separate dependencies:
   `space/README.md` (the Space header) and the CPU `space/requirements.txt` as its root files. The Space is deployed from it, so
   the Space's settings never change the submission's requirements.
 
-The live demo runs the same pipeline in a CPU setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model, and the risk
+The live demo runs the same pipeline in a CPU setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or verifier, and the risk
 curve from the same causal tracks (`src/demo.py`). It accepts clips up to 2 minutes / 300 MB. On 2 vCPUs, a 35 s 720p clip
 takes about 35 s and 4K takes about 2× the clip length.
 
@@ -70,11 +80,12 @@ video ─► scene registration (SIFT+RANSAC similarity vs. assets/scene_ref.jpg
       ├► YOLO11-L @960, FP16, every 3rd frame ─► car/truck duplicate suppression ─► ByteTrack
       │        └► track state: ground point, speed in body-diagonals / s
       ├► YOLOv8x anomaly model at 1 Hz
-      └► rule engine (src/rules.py) ─► merge / clip / drop blips ─► events
+      ├► rule engine (src/rules.py) ─► merge / clip / drop blips ─► events
+      │        └► accident / fire candidates ─► InternVL2.5-1B yes/no on the last 4 s of frames (src/vlm.py)
 Part B: YOLOv8n every 3rd frame ─► ByteTrack ─► time-to-collision on collision courses ─► EMA ─► risk
 ```
 
-**Learned** (off-the-shelf open weights; we trained nothing): YOLO11-L and YOLOv8n (COCO detectors), and the YOLOv8x crash/fire model.
+**Learned** (off-the-shelf open weights; we trained nothing): YOLO11-L and YOLOv8n (COCO detectors), the YOLOv8x crash/fire model, and the InternVL2.5-1B vision-language model.
 **Rule-based**: scene registration, signal read-out, every event rule, post-processing and the Part B risk score.
 
 Key design points:
@@ -83,6 +94,16 @@ Key design points:
 - **The signal is read from its lamps.** A lit lamp is ~5 px tall at 4K, so we measure colour in small windows at the calibrated lamp centres. On all four samples this gives a clean cycle of ~37 s red, ~35 s green and 3–6 s amber/transition (`scripts/signal_timeline.py`).
 - **Speeds are scale-free**, measured in body-diagonals per second of the track's ground point. The same threshold then works near and far from the camera, and at any resolution.
 - **Part B** scores time-to-collision only for pairs on a real collision course: closest approach < 0.3 of their size, held for 2 updates. Duplicate boxes are merged, far-field objects and far-carriageway pairs are skipped (image-space geometry is too compressed there), and same-direction pairs count only as fast rear-end closings. On the samples, which contain no crashes, the score is ≥ 0.5 in under 0.5 % of frames. An earlier version was ≥ 0.5 in 36–60 % of frames because of duplicate boxes and perspective convergence.
+- **Accidents are proposed by the tracks and confirmed by a vision-language model.** A candidate is the first moment two road
+  users' boxes touch (ground-point gap < 0.5 of the larger body diagonal) while one of them drives at ≥ 0.5 diag/s and the gap
+  shrank by ≥ 0.3 diag over the last second. Two seconds later, both must have slowed below 0.5 diag/s and still be within one
+  diagonal of each other: vehicles that drive on or apart are dropped. This cuts ~170 raw candidates per 5-minute sample to ~20.
+  Crash-model hits at conf ≥ 0.3 are also candidates. Each candidate is shown to InternVL2.5-1B as 4 frames (from 1 s before
+  contact to 2 s after), cropped to a square around the pair, with the question "has an accident or collision happened?".
+  p(yes) is read from the Yes/No logits of a single forward pass (no text generation, deterministic, ~1 s per question).
+  The event is reported at p ≥ 0.7, from the contact to the moment every involved road user has stopped or left.
+  The verifier is capped at 40 questions and 0.25× the video duration per video. It is loaded once when the harness imports
+  `solution.py`, and if its weights are missing Part A runs without it.
 - **Class policy.** `illegal_turn`, `illegal_u_turn` and `solid_line_crossing` are switched off: we do not have the permitted-manoeuvre map or the solid-line geometry, and a class predicted but absent from the test set costs macro-F1. The rule for each class and the reasoning are in `docs/class_policy.md`. All thresholds are in `src/config.py`.
 
 ### How the rules were tuned
@@ -120,6 +141,10 @@ Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the vid
 
 - **No labelled dev set.** F1 has not been measured. `src/devset/csv_to_gt.py` converts per-video CSV labels (`start,end,label,note`) into `evaluate.py` ground truth, and `scripts/eval_dev.sh` runs the whole evaluation. Labelling the four samples is the next step.
 - `accident`, `near_miss`, `wrong_way`, `fire_smoke` and `road_obstacle` produced no events on the samples. Their rules are deliberately strict, so recall on the hidden set is unknown.
+- The accident verifier was checked on other cameras only (the samples contain no crash). Scanning whole TAD clips with
+  1.5 s windows at p ≥ 0.7, it flagged 11 of 20 accident clips and 0 of 19 normal clips (≈1,000 normal windows); on
+  single CCTV stills its ROC AUC is 0.76. On the four samples it answered 84 questions, the highest p(yes) was 0.29, and
+  no accident was reported. Its recall on the hidden set also depends on the track-based candidates.
 - `jaywalking` ignores people within ~1 m of a zebra, island or kerb, which trades recall for precision.
 - The three turn/marking classes are off (see Class policy).
 - Part B is a heuristic (time-to-collision). It was not calibrated on real crashes because the samples contain none.
@@ -150,6 +175,7 @@ src/
   scene.py                  hand-calibrated scene layout (reference 4K frame)
   traffic_light.py          lamp read-out + debounced signal state
   perception.py             detector, duplicate suppression, tracker, anomaly model
+  vlm.py                    InternVL2.5-1B yes/no verifier for accident / fire candidates
   tracks.py                 per-track kinematics
   rules.py                  one method per event class
   postprocess.py            merge / clip / drop blips
@@ -160,7 +186,7 @@ src/
   demo.py                   website live demo (CPU setting, clips drawn from stored tracks)
   deep_eda.py, eda_extractor.py   EDA artefacts for the website
   devset/                   labelling helpers (CSV -> ground truth, review clips, report)
-scripts/                    replay_rules.py, signal_timeline.py, make_examples.py, build_space.py, eval_dev.sh, smoke.sh, make_clip.py
+scripts/                    replay_rules.py, signal_timeline.py, make_examples.py, build_space.py, eval_dev.sh, smoke.sh, make_clip.py, vlm_probe.py
 tests/                      unit tests + end-to-end smoke test through run_submission.py
 docs/                       scene.md, class_policy.md
 assets/scene_ref.jpg        reference frame for registration
@@ -181,10 +207,11 @@ Development: `pip install -r requirements-dev.txt`, then `bash scripts/smoke.sh`
 ## Open-source code used
 
 - Ultralytics YOLO (AGPL-3.0) for detection.
+- Hugging Face Transformers (Apache-2.0), timm (Apache-2.0) and einops (MIT) to run InternVL2.5-1B.
 - supervision (MIT) for ByteTrack.
 - OpenCV (Apache-2.0) for video I/O, SIFT and geometry.
 
-No external footage was used. The scene layout was drawn by hand on a sample frame. The organizers
+No external footage was used for tuning the rules (see Datasets for the verifier's evaluation data). The scene layout was drawn by hand on a sample frame. The organizers
 confirmed that `camera.md` is not provided.
 
 ---

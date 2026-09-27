@@ -7,6 +7,7 @@ answer in minutes:
     detector  YOLO11-S @768 (submission: YOLO11-L @960)
     rate      every 6th frame (submission: every 3rd)
     anomaly   model off (submission: YOLOv8x at 1 Hz)
+    verifier  off (submission: InternVL2.5-1B on accident / fire candidates)
 
 Part B's risk is computed from the same causal detections (RiskCore._score), so
 the video is decoded once. Annotated clips are drawn from the stored tracks
@@ -30,7 +31,8 @@ DEMO_SETTINGS = {
     "imgsz": 768,
     "stride": 6,
     "use_anomaly": False,
-    "budget_factor": 1e9,      # no time guard in the demo; progress is shown instead
+    "use_vlm": False,          # the 1B verifier is too slow for a 2-vCPU server
+    "budget_factor": 1e9,     # no time guard in the demo; progress is shown instead
     "max_width": 1280,         # frames are downscaled right after decoding (RAM on small servers)
 }
 DEMO_MAX_SEC = 120.0
