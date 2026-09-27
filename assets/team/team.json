@@ -7,7 +7,7 @@
       "role": "Computer vision & system architecture",
       "did": "Scene layout and per-video registration, tracking and event rules, the website.",
       "skills": ["PyTorch", "YOLO11", "OpenCV", "ByteTrack", "Streamlit"],
-      "links": {"GitHub": "https://github.com/DeWeWO", "LinkedIn": "https://www.linkedin.com/in/dewew/"},
+      "links": {"GitHub": "https://github.com/DeWeWO", "LinkedIn": "https://www.linkedin.com/in/dewew/", "Portfolio": "https://dewew.dev"},
       "projects": [
         {"name": "Hisobvaraq ERP", "url": "https://hisobvaraq.app", "desc": "Multi-tenant ERP platform and backend for distributors"},
         {"name": "Sirius POS & CRM", "url": "https://sirius.dewew.dev/", "desc": "Fast POS cashier interface and CRM system"},
