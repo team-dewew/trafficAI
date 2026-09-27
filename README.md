@@ -1,7 +1,7 @@
 
 # Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
-**Team: dewew** · Website: https://trafficai.dewew.dev · Repository: https://github.com/DeWeWO/wiut
+**Team: dewew** · Website: https://trafficai.dewew.dev · Repository: https://github.com/team-dewew/trafficAI
 
 The system watches a road-junction CCTV camera and does two things:
 
@@ -235,4 +235,5 @@ confirmed that `camera.md` is not provided.
 - **Ollabergan** — computer vision and system architecture, website ([GitHub](https://github.com/DeWeWO) • [LinkedIn](https://www.linkedin.com/in/dewew/))
 - **Seymonbek Ikramov** — anomaly model integration, Part B risk estimator ([GitHub](https://github.com/Seymonbek) • [LinkedIn](https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/))
 - **Soliyev Siroj** — sample-video EDA, scene annotation notes, evaluation runs ([GitHub](https://github.com/team-dewew))
+
 

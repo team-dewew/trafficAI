@@ -20,7 +20,7 @@ from src.demo import DEMO_MAX_MB, DEMO_MAX_SEC, run_demo  # type: ignore
 from src.registration import estimate_scene_transform  # type: ignore
 from src.scene import build_scene  # type: ignore
 
-REPO_URL = "https://github.com/DeWeWO/wiut"
+REPO_URL = "https://github.com/team-dewew/trafficAI"
 SITE_URL = "https://trafficai.dewew.dev"
 DEMO_SAMPLE = Path("samples/demo/C3896_60-95s_720p.mp4")
 
@@ -2093,4 +2093,5 @@ elif selected_section == "Links":
         if pred_p.exists():
             st.download_button("Download predictions_samples.json", pred_p.read_bytes(), file_name="predictions_samples.json",
                                mime="application/json", width="stretch")
+
 

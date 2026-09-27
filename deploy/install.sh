@@ -20,7 +20,7 @@ set -Eeuo pipefail
 # ------------------------------------------------------------------ defaults
 DOMAIN=""
 EMAIL=""
-REPO_URL="https://github.com/DeWeWO/wiut.git"
+REPO_URL="https://github.com/team-dewew/trafficAI.git"
 BRANCH="master"
 APP_USER="trafficai"
 APP_DIR="/opt/trafficai"
@@ -435,3 +435,4 @@ cat <<EOF
  status check:        sudo bash $REPO_DIR/deploy/check.sh
 ==================================================================
 EOF
+

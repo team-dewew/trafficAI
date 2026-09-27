@@ -39,29 +39,29 @@ and the Streamlit port is chosen so that it does not collide with anything alrea
 ## Steps
 
 **Step 1 depends on whether the GitHub repository is public.** Check with
-`curl -s -o /dev/null -w '%{http_code}\n' https://github.com/DeWeWO/wiut` (200 = public, 404 = private).
+`curl -s -o /dev/null -w '%{http_code}\n' https://github.com/team-dewew/trafficAI` (200 = public, 404 = private).
 The competition requires a public repository, so the owner should make it public before submission.
 Until then, use the private variant (1b).
 
 ```bash
 # 1a. public repository: get the code, no credentials needed
 sudo apt-get update && sudo apt-get install -y git
-sudo git clone --depth 1 https://github.com/DeWeWO/wiut.git /opt/trafficai/repo
-REPO=https://github.com/DeWeWO/wiut.git
+sudo git clone --depth 1 https://github.com/team-dewew/trafficAI.git /opt/trafficai/repo
+REPO=https://github.com/team-dewew/trafficAI.git
 
 # 1b. private repository: read-only deploy key (never ask for or store a personal token/password)
 sudo apt-get update && sudo apt-get install -y git
 sudo ssh-keygen -t ed25519 -N "" -C "trafficai-server" -f /root/.ssh/trafficai_deploy
 sudo cat /root/.ssh/trafficai_deploy.pub
-#     -> the owner adds this public key at github.com/DeWeWO/wiut -> Settings -> Deploy keys (read-only), then:
+#     -> the owner adds this public key at github.com/team-dewew/trafficAI -> Settings -> Deploy keys (read-only), then:
 sudo tee -a /root/.ssh/config >/dev/null <<'EOF'
 Host github.com
     IdentityFile /root/.ssh/trafficai_deploy
     IdentitiesOnly yes
 EOF
 sudo ssh-keyscan github.com | sudo tee -a /root/.ssh/known_hosts >/dev/null
-sudo git clone --depth 1 git@github.com:DeWeWO/wiut.git /opt/trafficai/repo
-REPO=git@github.com:DeWeWO/wiut.git
+sudo git clone --depth 1 git@github.com:team-dewew/trafficAI.git /opt/trafficai/repo
+REPO=git@github.com:team-dewew/trafficAI.git
 
 # 2. install everything (10-20 minutes, mostly the Python packages)
 sudo bash /opt/trafficai/repo/deploy/install.sh --domain trafficai.dewew.dev --repo "$REPO" --email <owner e-mail>
@@ -116,3 +116,4 @@ The live demo runs the submission pipeline in a CPU setting: YOLO11-S at 768 px 
 frame, frames downscaled to 1280 px, no crash/fire model, and one demo at a time (see `src/demo.py`).
 The submission itself runs on the organizers' GPU with `requirements.txt` and `run_submission.py`.
 This deployment does not affect it.
+
