@@ -1,4 +1,13 @@
--r requirements.txt
+# Website on a CPU server (installed by deploy/install.sh). Self-contained: CPU build of torch, no GPU.
+# The submission uses requirements.txt; tests and development use requirements-dev.txt.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+ultralytics==8.4.161
+supervision==0.30.5
+numpy>=1.26,<2.3
+opencv-python-headless==4.11.0.86
+lap>=0.5.12
 streamlit==1.64.0
 pandas>=2.2,<3
 imageio-ffmpeg==0.6.0

@@ -46,10 +46,6 @@ class Hysteresis:
         if end - start >= self.min_duration:
             self.sink.append([start, end, self.label, key])
 
-    def flush(self) -> None:
-        for key in list(self.active):
-            self.close(key)
-
 
 def _cos(v: tuple[float, float], u: np.ndarray) -> float:
     n = float(np.hypot(*v))

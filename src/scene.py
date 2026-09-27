@@ -71,7 +71,6 @@ SCENE_CONFIG: dict = {
 # Direction of travel in lane_ltr (unit vector, reference frame): along the
 # median towards the stop line / junction. lane_rtl flows the opposite way.
 FLOW_LTR = np.array([0.935, 0.355])
-FLOW_RTL = -FLOW_LTR
 
 # A point well upstream of the stop lines inside lane_ltr (tells which side of
 # each stop line is "before the line").

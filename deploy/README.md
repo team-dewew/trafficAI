@@ -12,8 +12,8 @@ message that says what is wrong.
 
 | piece | where | notes |
 |---|---|---|
-| code | `/opt/trafficai/repo` (git, `master`), site bundle in `/opt/trafficai/site` | built by `scripts/build_space.py` |
-| Python env | `/opt/trafficai/venv` | CPU-only torch; ~2 GB of disk |
+| code | `/opt/trafficai/repo` (git, `master`, root-owned), site copy in `/opt/trafficai/site` | the tracked files of the deployed commit (`git archive`) |
+| Python env | `/opt/trafficai/venv` | `requirements-web.txt` (CPU-only torch); ~2 GB of disk |
 | weights | `/opt/trafficai/data/weights/yolo11s.pt` (19 MB) | the website demo's detector |
 | service | systemd `trafficai` → Streamlit on **127.0.0.1:<free port 8600-8699>** | memory-capped (`MemoryMax=3000M`), `Nice=5`, restarts on failure, starts on boot |
 | web | nginx site `/etc/nginx/sites-available/trafficai.conf` for the domain | websockets, 800 MB uploads (~45 s of 4K) |

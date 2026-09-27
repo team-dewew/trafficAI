@@ -7,9 +7,9 @@
 #   1. preflight: root, OS, disk, memory (+ a swap file if swap is small), DNS of the domain -> this server,
 #      who owns ports 80/443
 #   2. apt packages: python3-venv, git, nginx (only if nothing else serves 80/443), certbot
-#   3. system user 'trafficai', code in /opt/trafficai (repo -> website bundle via scripts/build_space.py)
-#   4. Python venv with the CPU dependency set (space/requirements.txt + the Space's Streamlit version)
-#   5. demo detector weights, kept outside the bundle so updates do not re-download them
+#   3. system user 'trafficai', code in /opt/trafficai (git checkout -> site copy of the tracked files)
+#   4. Python venv with the website's CPU dependency set (requirements-web.txt)
+#   5. demo detector weights, kept outside the site copy so updates do not re-download them
 #   6. a free localhost port (default range 8600-8699) that no other service uses
 #   7. systemd service (memory-capped, restarts on failure, starts on boot)
 #   8. nginx site for the domain -> 127.0.0.1:<port> (websockets, 800 MB uploads)
@@ -172,19 +172,20 @@ log "3/10 user '$APP_USER' and code ($REPO_URL @ $BRANCH)"
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
 mkdir -p "$DATA_DIR/weights" "$TMP_DIR" /etc/trafficai
 if [[ -d "$REPO_DIR/.git" ]]; then
-  git -C "$REPO_DIR" fetch --quiet --depth 1 origin "$BRANCH"
-  git -C "$REPO_DIR" reset --quiet --hard FETCH_HEAD
+  git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" fetch --quiet --depth 1 origin "$BRANCH"
+  git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" reset --quiet --hard FETCH_HEAD
 else
   rm -rf "$REPO_DIR"
   git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$REPO_DIR"
 fi
-COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
+COMMIT=$(git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" rev-parse --short HEAD)
 log "deploying commit $COMMIT"
 
-( cd "$REPO_DIR" && "$PY" scripts/build_space.py )
+# the site runs from a copy of the tracked files, so a later fetch never changes a running site
 rm -rf "$SITE_DIR.new"
-cp -a "$REPO_DIR/dist/space" "$SITE_DIR.new"
-# keep weights outside the bundle; link them in
+mkdir -p "$SITE_DIR.new"
+git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" archive --format=tar HEAD | tar -x -C "$SITE_DIR.new"
+# keep weights outside the site copy; link them in
 rm -f "$SITE_DIR.new/weights/"*.pt
 for f in "$DATA_DIR"/weights/*.pt; do
   if [[ -e "$f" ]]; then ln -sf "$f" "$SITE_DIR.new/weights/$(basename "$f")"; fi
@@ -196,13 +197,12 @@ rm -rf "$SITE_DIR.old"
 
 # ------------------------------------------------------------------ 4. venv
 log "4/10 Python environment (CPU)"
-ST_VERSION=$(sed -n 's/^sdk_version:[[:space:]]*//p' "$REPO_DIR/space/README.md" | tr -d '"[:space:]')
-[[ -n "$ST_VERSION" ]] || ST_VERSION="1.64.0"
-REQ_HASH=$( (cat "$REPO_DIR/space/requirements.txt"; echo "streamlit==$ST_VERSION"; "$PY" --version) | sha256sum | cut -c1-16)
+REQ_FILE="$REPO_DIR/requirements-web.txt"
+REQ_HASH=$( (cat "$REQ_FILE"; "$PY" --version) | sha256sum | cut -c1-16)
 if [[ ! -x "$VENV_DIR/bin/python" || "$(cat "$VENV_DIR/.req_hash" 2>/dev/null)" != "$REQ_HASH" ]]; then
   [[ -x "$VENV_DIR/bin/python" ]] || "$PY" -m venv "$VENV_DIR"
   "$VENV_DIR/bin/pip" install --quiet --no-cache-dir --upgrade pip wheel
-  "$VENV_DIR/bin/pip" install --quiet --no-cache-dir -r "$REPO_DIR/space/requirements.txt" "streamlit==$ST_VERSION"
+  "$VENV_DIR/bin/pip" install --quiet --no-cache-dir -r "$REQ_FILE"
   echo "$REQ_HASH" > "$VENV_DIR/.req_hash"
 else
   log "dependencies unchanged ($REQ_HASH)"
@@ -219,6 +219,9 @@ ln -sf "$DATA_DIR/weights/yolo11s.pt" "$SITE_DIR/weights/yolo11s.pt"
 ( cd "$SITE_DIR/weights" && grep ' yolo11s.pt$' SHA256SUMS | sha256sum -c --quiet - ) || die "yolo11s.pt checksum mismatch"
 
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+# the git checkout stays root-owned: the service never needs to write it, and root's git refuses
+# to work in a repository owned by another user
+chown -R root:root "$REPO_DIR"
 chmod 750 "$APP_DIR"
 
 # ------------------------------------------------------------------ 6. port

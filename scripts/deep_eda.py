@@ -13,7 +13,7 @@ produces every artifact the website's EDA section needs:
   samples/previews/<VID>_preview.mp4  fully annotated preview (via src/annotate.py)
 
 Usage:
-    python src/deep_eda.py [--videos samples] [--stride 2]
+    python scripts/deep_eda.py [--videos samples] [--stride 2]
 """
 from __future__ import annotations
 

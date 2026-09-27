@@ -19,8 +19,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 REPO_DIR="$APP_DIR/repo"
-git -C "$REPO_DIR" fetch --quiet --depth 1 origin "$BRANCH"
-git -C "$REPO_DIR" reset --quiet --hard FETCH_HEAD
-echo "[trafficai] updating to $(git -C "$REPO_DIR" rev-parse --short HEAD) ($BRANCH)"
+git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" fetch --quiet --depth 1 origin "$BRANCH"
+git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" reset --quiet --hard FETCH_HEAD
+echo "[trafficai] updating to $(git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" rev-parse --short HEAD) ($BRANCH)"
 exec bash "$REPO_DIR/deploy/install.sh" --domain "$DOMAIN" --branch "$BRANCH" --repo "$REPO_URL" \
   --dir "$APP_DIR" --port "$PORT" "${EXTRA[@]}"

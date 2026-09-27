@@ -1,8 +1,4 @@
-"""
-Core source package for the WIUT Hackathon 2026 CV Track solution.
+"""Traffic event detection (Part A) and accident anticipation (Part B) for the WIUT Hackathon 2026 CV track.
 
-Modules:
-    annotate      — annotated-video renderer (zone overlay, tracks, event banners)
-    deep_eda      — one-pass EDA artifact generator (counts, density, heatmaps, trajectories)
-    eda_extractor — lightweight sample-video metadata & first-frame extraction
+solution.py at the repository root is the entry point; see the README for the module layout.
 """

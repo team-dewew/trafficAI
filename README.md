@@ -50,20 +50,22 @@ acceptance threshold, and none of their files are in this repository):
 
 The scene layout was drawn by hand on a frame of the provided sample videos.
 
-After the download, nothing else is fetched: the code loads weights only from
-`weights/` and raises an error instead of downloading anything.
+After the download, nothing else is fetched: every model is loaded from `weights/` only. A missing YOLO weight
+raises an error that names the download command; if `InternVL2_5-1B/` is missing, Part A runs without the verifier.
 
 A `Dockerfile` (CUDA 12.4, Python 3.11) is also provided. Its header shows the build/run commands.
 
-`requirements.txt` is the submission environment (pinned, CUDA build of torch on Linux). The website has
-separate dependencies:
+### Which requirements file
 
-- **Locally:** `pip install -r requirements-web.txt && streamlit run app.py`.
-- **Own server (the public website):** `deploy/install.sh` installs it on an Ubuntu server without a GPU, behind nginx with a
-  Let's Encrypt certificate (see `deploy/README.md`).
-- **Hugging Face Space (alternative):** `python scripts/build_space.py` writes `dist/space/`. That folder holds the site files, with
-  `space/README.md` (the Space header) and the CPU `space/requirements.txt` as its root files. The Space is deployed from it, so
-  the Space's settings never change the submission's requirements.
+| file | for | torch build |
+|---|---|---|
+| `requirements.txt` | **the submission** (`run_submission.py` on the GPU machine) | CUDA (Linux) |
+| `requirements-web.txt` | the public website on a CPU server; installed by `deploy/install.sh` | CPU (`+cpu` wheels) |
+| `requirements-dev.txt` | development on a GPU machine: `requirements.txt` + Streamlit + pytest/ruff | CUDA |
+
+The website is self-hosted on our own Ubuntu server (2 vCPU, no GPU) at https://trafficai.dewew.dev, behind nginx with a
+Let's Encrypt certificate. `deploy/install.sh` sets up everything (see `deploy/README.md`); locally, after
+`pip install -r requirements-dev.txt`, run `streamlit run app.py`.
 
 The live demo runs the same pipeline in a CPU setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or verifier, and the risk
 curve from the same causal tracks (`src/demo.py`). It accepts clips up to 2 minutes / 800 MB (about 45 s of 4K). On 2 vCPUs, a 35 s 720p clip
@@ -133,7 +135,9 @@ patterns that each rule now excludes:
 | C3902.MP4 | 318 s | 24 | failure_to_yield 8, jaywalking 15, stop_line 1 | 159 s | 207 s | 1.15x | 0.35% |
 | C3905.MP4 | 128 s | 9 | congestion 1, failure_to_yield 4, jaywalking 2, stop_line 1, stopped_vehicle 1 | 67 s | 82 s | 1.17x | 0.00% |
 
-Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the video duration.
+Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the video duration. These timings were measured
+before the accident verifier was added. With it, every event and risk value is identical, and it asked 8–31 questions per
+video (15–55 s, measured while another application was using the same GPU; see `docs/PROGRESS.md`).
 
 ---
 
@@ -155,7 +159,8 @@ Run on a laptop RTX 3050 (8 GB) with a 4K H.264 input; the budget is 3× the vid
 
 `src/config.py:seed_everything(42)` seeds `random`, NumPy and PyTorch, and sets cuDNN
 to deterministic mode. The pipeline has no other randomness: ByteTrack and the
-rules are deterministic given the detections. GPU convolution kernels can still
+rules are deterministic given the detections. The verifier reads p(yes) from one FP16
+forward pass (no sampling), so it is deterministic as well. GPU kernels can still
 differ at the floating-point-noise level across GPU models.
 
 A time guard exists: if Part A's frame loop runs slower than 1.6× real time, the detector
@@ -184,19 +189,27 @@ src/
   config.py                 thresholds, enabled classes, seed
   annotate.py               annotated-video renderer (website previews)
   demo.py                   website live demo (CPU setting, clips drawn from stored tracks)
-  deep_eda.py, eda_extractor.py   EDA artefacts for the website
   devset/                   labelling helpers (CSV -> ground truth, review clips, report)
-scripts/                    replay_rules.py, signal_timeline.py, make_examples.py, build_space.py, eval_dev.sh, smoke.sh, make_clip.py, vlm_probe.py
-tests/                      unit tests + end-to-end smoke test through run_submission.py
-docs/                       scene.md, class_policy.md
+scripts/
+  replay_rules.py           cache perception once, replay the rules in seconds (tuning)
+  signal_timeline.py        signal phases per video
+  vlm_probe.py              speed and p(yes) of the verifier on chosen windows
+  deep_eda.py, eda_extractor.py   EDA artefacts in eda_results/ (website EDA page)
+  make_examples.py          example frames per class in assets/examples/ (website Results page)
+  make_clip.py, smoke.sh, eval_dev.sh   test clip, test run, dev-set evaluation
+tests/                      unit tests, harness smoke test, website pages + live-demo click-through
+docs/                       scene.md, class_policy.md, PROGRESS.md (verification log)
+examples/                   starter-kit ground truth / predictions examples for evaluate.py
+eda_results/                EDA of the sample videos (metadata, counts, heatmaps, trajectories)
 assets/scene_ref.jpg        reference frame for registration
 assets/examples/            one or two frames per detected class (website Results)
 assets/team/team.json       team page content (roles, contributions, links, previous projects)
 samples/previews/           annotated sample videos; samples/demo/ a 35 s 720p clip for the demo
-space/                      website CPU requirements + Hugging Face Space header (see build_space.py)
 deploy/                     self-hosted website: install/update/check/uninstall scripts (nginx, Let's Encrypt, systemd)
 weights/                    download.sh / download.py / SHA256SUMS
 app.py                      team website (Streamlit)
+requirements*.txt           submission / website / development (see "Which requirements file")
+Dockerfile                  optional container for the submission
 ```
 
 Development: `pip install -r requirements-dev.txt`, then `bash scripts/smoke.sh`, which runs

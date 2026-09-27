@@ -31,7 +31,3 @@ def load_yolo(name: str) -> YOLO:
 def predict(model: YOLO, frame, **kwargs):
     """Single-image inference with the project-wide device/precision settings."""
     return model.predict(frame, verbose=False, quantize=16 if USE_HALF else None, device=DEVICE, **kwargs)[0]
-
-
-# Backwards-compatible alias used by older tooling.
-_load_yolo = load_yolo

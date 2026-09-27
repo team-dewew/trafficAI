@@ -1,7 +1,7 @@
 """Website live demo: the submission pipeline in a CPU-friendly configuration.
 
 Same registration, signal read-out, tracking, rules and post-processing as
-`detect_events`, with a lighter perception setting so that a free CPU host can
+`detect_events`, with a lighter perception setting so that a small CPU server (2 vCPU) can
 answer in minutes:
 
     detector  YOLO11-S @768 (submission: YOLO11-L @960)

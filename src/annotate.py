@@ -75,7 +75,7 @@ def render_annotated(
     progress_callback=None,
 ) -> str:
     """Render an annotated copy of `video_path` (optionally only [start_sec, end_sec])."""
-    scene, reg = open_scene(video_path)
+    scene, _ = open_scene(video_path)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"cannot open {video_path}")

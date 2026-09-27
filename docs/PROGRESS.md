@@ -44,19 +44,21 @@ The events are identical to those of a separate harness run on all four videos (
 ```
 $ uv pip compile requirements.txt --python-version 3.10 --python-platform x86_64-manylinux_2_28 --index-strategy unsafe-best-match
 torch==2.6.0  nvidia-cudnn-cu12==9.1.0.70  supervision==0.30.5  numpy==2.2.6   (CUDA build of torch)
-$ uv pip compile space/requirements.txt + streamlit==1.64.0 --python-version 3.11 ...
+$ uv pip compile requirements-web.txt --python-version 3.10 / 3.12 ...
 torch==2.6.0+cpu  streamlit==1.64.0  pandas==2.3.3   (website, CPU)
 ```
 
 An intermediate commit had put the website's CPU torch index into the root `requirements.txt`. With it, pip resolved
 `torch==2.14.0+cpu` on the GPU machine, and Part A on CPU would exceed the 3x time budget. The submission file is pinned
-again, and the website has its own `space/requirements.txt`.
+again, and the website has its own `requirements-web.txt`.
 
 ## Website
 
-- `python scripts/build_space.py` then run the bundle on CPU (`CUDA_VISIBLE_DEVICES=""`, 2 torch threads) with only
-  `dist/space/` on disk: every page renders, the demo downloads `yolo11s.pt` on first use, and the bundled 35 s 720p clip
+- The site copy that `deploy/install.sh` makes (`git archive HEAD`) was run on CPU (`CUDA_VISIBLE_DEVICES=""`,
+  2 torch threads): every page renders, the demo downloads `yolo11s.pt` on first use, and the bundled 35 s 720p clip
   takes 18-36 s. An 8 s 4K clip runs at about 2x real time.
+- An 800 MB upload (45 s of 4K, 768 MB) in the server setting, with the file held in memory as Streamlit does:
+  68 s on the laptop CPU, peak RSS 2.5 GB, `stop_line` and `red_light` found. The service limit is 3.0 GB.
 - Checked in a browser at 1440x900 and at phone width (375 px); the sidebar collapses on phones.
 
 A full install inside a clean Docker container was **not** run here, because the Docker daemon was unavailable on this machine.

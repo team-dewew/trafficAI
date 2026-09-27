@@ -10,6 +10,7 @@ The implementation lives in src/:
     src/traffic_light.py  lamp-based signal state
     src/perception.py     YOLO11-L detector + duplicate suppression + ByteTrack
     src/rules.py          event rules (one method per class)
+    src/vlm.py            InternVL2.5-1B yes/no verifier for accident / fire candidates
     src/postprocess.py    merging / clipping of segments
     src/events.py         Part A pipeline
     src/risk.py           Part B causal risk estimator
@@ -71,9 +72,6 @@ CLASSES: list[str] = [
     "road_obstacle",       # debris, animal or fallen object on the carriageway
     "fire_smoke",          # visible fire or smoke from a vehicle or on the road
 ]
-
-RISK_HORIZON_SEC = 5.0
-
 
 def detect_events(video_path: str, progress_callback=None) -> list[list]:
     """Part A. Return [[start_sec, end_sec, label], ...] for one .mp4.

@@ -1138,12 +1138,15 @@ if selected_section == "Team":
     cols = st.columns(len(team), gap="large")
     for col, m in zip(cols, team):
         esc = html.escape
+        def real(u: str) -> bool:           # "#" / empty = not filled in yet: no dead links on the page
+            return str(u).startswith("http")
         links = "".join(
-            f'<a class="btn-link" href="{esc(u)}" target="_blank">{esc(k)}</a>' for k, u in m.get("links", {}).items()
+            f'<a class="btn-link" href="{esc(u)}" target="_blank">{esc(k)}</a>' for k, u in m.get("links", {}).items() if real(u)
         )
         skills = "".join(f'<span class="skill-chip">{esc(x)}</span>' for x in m.get("skills", []))
         projects = "".join(
-            f'<li><a href="{esc(p["url"])}" target="_blank" style="color:#38bdf8;">{esc(p["name"])}</a> - {esc(p["desc"])}</li>'
+            (f'<li><a href="{esc(p["url"])}" target="_blank" style="color:#38bdf8;">{esc(p["name"])}</a> - {esc(p["desc"])}</li>'
+             if real(p.get("url", "")) else f'<li><b>{esc(p["name"])}</b> - {esc(p["desc"])}</li>')
             for p in m.get("projects", [])
         )
         proj_html = (
@@ -1200,7 +1203,7 @@ if selected_section == "Team":
             """
             <div class="callout-card callout-warning">
                 <div class="callout-title">High-Performance Computing</div>
-                <div class="callout-body">FP16 CUDA acceleration, ~28 FPS processing on 4K footage, and official evaluation harness compliance.</div>
+                <div class="callout-body">FP16 CUDA inference on every 3rd frame of 4K video: Part A + Part B in about 1.1-1.3x the video duration on a laptop RTX 3050 (budget 3x), with the official harness unchanged.</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1421,7 +1424,7 @@ elif selected_section == "EDA of sample videos":
         """,
         unsafe_allow_html=True,
     )
-    # Real metadata extracted by src/eda_extractor.py (fallback: audited values)
+    # Real metadata extracted by scripts/eda_extractor.py (fallback: audited values)
     eda_dir = Path("eda_results")
     meta_csv = eda_dir / "metadata.csv"
     if meta_csv.exists():
@@ -1481,7 +1484,7 @@ elif selected_section == "EDA of sample videos":
                 "Detections": [4850, 1420, 890, 420, 310, 195],
             }, index=["Car", "Pedestrian", "Bus", "Truck", "Motorcycle", "Bicycle"])
         st.bar_chart(object_counts)
-        st.caption("Measured by the YOLO11 perception pass across all four feeds (src/deep_eda.py).")
+        st.caption("Measured by the YOLO11 perception pass across all four feeds (scripts/deep_eda.py).")
 
     with c2:
         st.markdown("#### Traffic Density Curve (Vehicles per Frame)")
@@ -1807,7 +1810,7 @@ elif selected_section == "Live Demo":
             in a CPU-friendly setting: YOLO11-S at 768 px on every 6th frame, no crash/fire model or VLM verifier, and the risk curve computed from the same
             causal tracks. The submission itself uses YOLO11-L at 960 px on every 3rd frame on a GPU, so results can differ slightly.<br>
             <b>Accepted input.</b> .mp4 (H.264), at most {DEMO_MAX_SEC / 60:.0f} minutes and {DEMO_MAX_MB} MB, from the competition camera
-            (other cameras run, but the zones will not fit). <b>Expected time</b> on the free 2-vCPU host: about the clip length
+            (other cameras run, but the zones will not fit). <b>Expected time</b> on our 2-vCPU server: about the clip length
             for 720p and about 2x the clip length for 4K.
             </div>
         </div>
@@ -1997,7 +2000,8 @@ elif selected_section == "Report":
                     <b>• Reading the signal from its lamps</b> gives a clean red/green cycle on all four samples, day and dusk.<br><br>
                     <b>• Scale-free motion</b>: speeds are measured in body-diagonals per second of track ground points, so one threshold works near and far from the camera.<br><br>
                     <b>• Frame-level spot checks</b> of every candidate event (montages rendered from cached perception) exposed the real false-positive patterns quickly.<br><br>
-                    <b>• Runtime</b>: YOLO11-L @960 FP16 on every 3rd frame and the anomaly model at 1 Hz keep Part A at about 0.5x real time on an RTX 3050 laptop GPU.
+                    <b>• A vision-language model as a verifier, not a detector</b>: the tracks propose collision candidates and InternVL2.5-1B confirms them on 4 cropped frames. 84 questions on the samples, no false accident; 11 of 20 crash clips from another dataset (TAD) flagged, 0 of 19 normal clips.<br><br>
+                    <b>• Runtime</b>: YOLO11-L @960 FP16 on every 3rd frame and the anomaly model at 1 Hz keep Part A at about 0.5x real time on an RTX 3050 laptop GPU; the verifier adds 8-31 questions of 1-2 s each per video.
                 </div>
             </div>
             """,
