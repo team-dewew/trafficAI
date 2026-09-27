@@ -35,9 +35,9 @@
       "skills": ["EDA", "Pandas", "FFmpeg", "Visualisation"],
       "links": {"GitHub": "#", "LinkedIn": "#"},
       "projects": [
-        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"},
-        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"},
-        {"name": "Coming soon", "url": "#", "desc": "Project details will be added shortly"}
+        {"name": "Smart Greenhouse", "url": "#", "desc": "IoT automated climate control system for greenhouses"},
+        {"name": "Agro Analytics", "url": "#", "desc": "Multispectral image analysis for crop yield prediction"},
+        {"name": "Smart Irrigation", "url": "#", "desc": "LoRaWAN sensor nodes for optimized water usage"}
       ]
     }
   ]
