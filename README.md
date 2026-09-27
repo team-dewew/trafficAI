@@ -1,3 +1,6 @@
+> [!WARNING]
+> **?? MUHIM: Kod barqaror ishlashi uchun kompyuteringizda Python 3.11 yoki 3.12 o'rnatilganligiga ishonch hosil qiling! Python 3.13 yoki undan yuqori versiyalarda kutubxonalar ishlamaydi.**
+
 # Traffic AI — WIUT Hackathon 2026, Computer Vision track
 
 **Team: dewew** · Website: https://trafficai.dewew.dev · Repository: https://github.com/DeWeWO/wiut
@@ -234,3 +237,4 @@ confirmed that `camera.md` is not provided.
 - **Ollabergan** — computer vision and system architecture, website ([GitHub](https://github.com/DeWeWO) • [LinkedIn](https://www.linkedin.com/in/dewew/))
 - **Seymonbek Ikramov** — anomaly model integration, Part B risk estimator ([GitHub](https://github.com/Seymonbek) • [LinkedIn](https://www.linkedin.com/in/seymonbek-ikramov-0022b2386/))
 - **Soliyev Siroj** — sample-video EDA, scene annotation notes, evaluation runs
+
